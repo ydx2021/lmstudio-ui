@@ -39,7 +39,7 @@
     }
 
     header {
-      position: sticky; top: 0; z-index: 10;
+      position: fixed; top: 0; z-index: 100; left: 0; right: 0;
       backdrop-filter: blur(8px);
       background: color-mix(in oklab, var(--panel) 85%, transparent);
       border-bottom: 1px solid color-mix(in oklab, var(--muted) 20%, transparent);
@@ -60,12 +60,29 @@
     .btn.primary { background: var(--accent); color: #04060a; border-color: color-mix(in oklab, var(--accent), black 15%); }
     .btn.ghost { background: transparent; }
 
-    main { max-width: 900px; margin: 16px auto; padding: 0 14px 160px; }
+    main { max-width: 900px; margin: 16px auto; padding: 0 14px 160px; margin: 80px auto 16px;}
 
     .session-meta { display:flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 12px; margin: 8px 2px 14px; }
 
     .msg { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin: 10px 0; padding: 12px; background: var(--panel);
       border: 1px solid #2a2f3a; border-radius: var(--radius); }
+
+    /* Make each message a stacked block: meta row on top, bubble full-width */
+.msg { display: block; } /* overrides the grid */
+
+/* Put role + model on one line */
+.msg .role { 
+  display: inline-block; 
+  margin-right: 8px;
+}
+.msg .model-tag { 
+  display: inline-block; 
+  margin-top: 0; 
+}
+
+/* Space the bubble below the meta row */
+.msg .bubble { margin-top: 6px; }
+
     .role { font-weight: 700; text-transform: uppercase; font-size: 12px; color: var(--muted); letter-spacing: .06em; }
     .bubble { white-space: pre-wrap; word-wrap: break-word; font-size: 15px; }
     .model-tag { 
@@ -136,6 +153,39 @@
     }
     .history-item:hover { background: #2a2f3a; }
     .history-item.active { background: var(--accent); color: #04060a; }
+
+    /* Compact header tweaks */
+.bar { gap: 6px; }
+.btn { padding: 6px 10px; border-radius: 8px; }
+
+/* Kebab menu */
+.menu { position: relative; }
+.menu-btn { width: 36px; padding: 0; font-size: 18px; line-height: 1; }
+.menu-list {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  display: none; min-width: 180px; z-index: 200;
+  background: var(--panel); border: 1px solid #2a2f3a; border-radius: 10px;
+  padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+.menu.open .menu-list { display: block; }
+.menu-item {
+  width: 100%; text-align: left; background: transparent; border: 0; color: var(--fg);
+  padding: 8px 10px; border-radius: 8px; font: inherit; cursor: pointer;
+}
+.menu-item:hover { background: #2a2f3a; }
+.menu-sep { height: 1px; background: #2a2f3a; margin: 6px 4px; }
+
+.composer .actions input[type="number"] { width: 9ch; }
+
+#temp { width: 7ch; }
+
+/* Optional: tighten labels on small screens */
+@media (max-width: 900px) {
+  .bar label { display: none; }
+  #apiBase { width: 12rem; }
+}
+
+
   </style>
 </head>
 <body>
@@ -151,16 +201,28 @@
         <button class="btn ghost" id="refreshModels" title="Refresh models">↻</button>
       </div>
       <div class="right">
-        <button class="btn ghost" id="historyBtn" title="Chat History">📜 History</button>
-        <span class="status" id="status">
-          <span class="dot offline"></span>
-          <span class="statustext">Offline</span>
-        </span>
-        <span class="badge" id="modelBadge" title="Current model">model: —</span>
-        <button class="btn" id="printBtn" title="Print or Save as PDF">🖨 Print</button>
-        <button class="btn ghost" id="exportBtn" title="Export chat as Markdown">⬇︎ Export</button>
-        <button class="btn" id="newBtn" title="Start a new chat">＋ New</button>
-      </div>
+  <span class="status" id="status">
+    <span class="dot offline"></span>
+    <span class="statustext">Offline</span>
+  </span>
+  <span class="badge" id="modelBadge" title="Current model" style="display:none">model: —</span>
+
+  <!-- Kebab menu -->
+  <div class="menu" id="kebabMenu">
+    <button class="btn ghost menu-btn" id="menuBtn" title="More actions">⋮</button>
+    <div class="menu-list" role="menu" aria-labelledby="menuBtn">
+      <!-- Keep IDs so your existing JS keeps working -->
+      <button class="menu-item" id="historyBtn" role="menuitem">📜 History</button>
+      <div class="menu-sep" aria-hidden="true"></div>
+      <button class="menu-item" id="printBtn" role="menuitem">🖨 Print</button>
+      <button class="menu-item" id="exportBtn" role="menuitem">⬇︎ Export</button>
+    </div>
+  </div>
+
+  <!-- Keep New visible since it’s high-frequency -->
+  <button class="btn" id="newBtn" title="Start a new chat">＋ New</button>
+</div>
+
     </div>
   </header>
 
@@ -882,5 +944,26 @@
     // Save session when system prompt changes
     sysEl.addEventListener('blur', saveSession);
   </script>
+
+  <script>
+  (() => {
+    const menu = document.getElementById('kebabMenu');
+    const btn  = document.getElementById('menuBtn');
+    if (!menu || !btn) return;
+
+    const close = () => menu.classList.remove('open');
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.toggle('open');
+    });
+
+    // Close on outside click / ESC
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+  })();
+</script>
 </body>
 </html>
