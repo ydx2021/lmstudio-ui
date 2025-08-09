@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LM Studio Web UI — Print-friendly & Stream-optimized</title>
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --panel: #111317;
+      --muted: #8b939c;
+      --fg: #e6e6e6;
+      --accent: #4aa3ff;
+      --ok: #38c172;
+      --warn: #ffb020;
+      --err: #e75050;
+      --radius: 14px;
+      --gap: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system,
+              "PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC",
+              "Microsoft YaHei","WenQuanYi Micro Hei",
+              Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji", sans-serif;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root { --bg: #fafafa; --panel: #ffffff; --fg: #16181d; --muted:#5b6470; }
+      body { background-image: linear-gradient(180deg,#ffffff, #f2f6ff); }
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--fg);
+      background: var(--bg);
+      line-height: 1.45;
+    }
+
+    header {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: blur(8px);
+      background: color-mix(in oklab, var(--panel) 85%, transparent);
+      border-bottom: 1px solid color-mix(in oklab, var(--muted) 20%, transparent);
+    }
+
+    .bar { max-width: 1100px; margin: 0 auto; padding: 10px 14px; display: grid; gap: 8px; grid-template-columns: 1fr auto; align-items: center; }
+    .bar .left, .bar .right { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+    .bar input[type="text"], .bar input[type="password"], .bar select {
+      background: var(--panel); border: 1px solid #2a2f3a; color: var(--fg);
+      padding: 8px 10px; border-radius: 10px; outline: none; min-width: 0;
+    }
+    .bar input[type="number"] { width: 6rem; }
+    .bar label { font-size: 12px; color: var(--muted); }
+
+    .btn { cursor: pointer; border: 1px solid #2a2f3a; background: #1a1e25; color: var(--fg);
+      padding: 8px 12px; border-radius: 10px; font-weight: 600; transition: transform .05s ease; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--accent); color: #04060a; border-color: color-mix(in oklab, var(--accent), black 15%); }
+    .btn.ghost { background: transparent; }
+
+    main { max-width: 900px; margin: 16px auto; padding: 0 14px 160px; }
+
+    .session-meta { display:flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 12px; margin: 8px 2px 14px; }
+
+    .msg { display: grid; grid-template-columns: auto 1fr; gap: 10px; margin: 10px 0; padding: 12px; background: var(--panel);
+      border: 1px solid #2a2f3a; border-radius: var(--radius); }
+    .role { font-weight: 700; text-transform: uppercase; font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+    .bubble { white-space: pre-wrap; word-wrap: break-word; font-size: 15px; }
+    .model-tag { 
+      font-size: 10px; color: var(--muted); 
+      background: #1a1e25; padding: 2px 6px; border-radius: 4px;
+      margin-top: 6px; display: inline-block;
+    }
+
+    .composer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 9; border-top: 1px solid #2a2f3a; background: color-mix(in oklab, var(--panel) 90%, transparent);
+      backdrop-filter: blur(10px); }
+    .composer .wrap { max-width: 900px; margin: 0 auto; padding: 12px 14px; display: grid; gap: 10px; }
+    .composer textarea { width: 100%; min-height: 80px; max-height: 45vh; resize: vertical; padding: 12px; font-size: 15px;
+      border-radius: var(--radius); background: var(--panel); border: 1px solid #2a2f3a; color: var(--fg); outline: none; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .system { background: #0a3a2b20; border-color: #0a3a2b40; }
+    .assistant { background: #15406a20; border-color: #15406a40; }
+    .user { background: #3a1a1a20; border-color: #3a1a1a40; }
+
+    .error { color: var(--err); font-family: var(--mono); font-size: 12px; }
+
+    /* Status + model badges */
+    .status{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+      background:#1a1e25;border:1px solid #2a2f3a;font-size:12px}
+    .status .dot{width:8px;height:8px;border-radius:50%;background:#888}
+    .status .dot.online{background:var(--ok)}
+    .status .dot.offline{background:var(--err)}
+    .status .dot.busy{background:var(--warn)}
+    .badge{padding:6px 10px;border-radius:999px;border:1px solid #2a2f3a;background:#111317;font-size:12px}
+
+    /* Markdown styling */
+    .bubble.markdown { white-space: normal; }
+    .bubble.markdown pre { overflow:auto; padding: 10px; border-radius: 10px; background: #0f1114; border: 1px solid #2a2f3a; }
+    .bubble.markdown code { font-family: var(--mono), "Noto Sans Mono CJK SC","Source Han Mono SC"; font-size: 0.95em; }
+    .bubble.markdown a { color: var(--accent); text-decoration: none; }
+    .bubble.markdown a:hover { text-decoration: underline; }
+
+    /* Print styles: clean transcript & CJK-friendly; keep assistant with prompt */
+    @media print {
+      header, .composer, .actions-inline { display: none !important; }
+      body { background: #fff; font-family: var(--sans); -webkit-print-color-adjust: exact; print-color-adjust: exact; color:#000 !important; }
+      main { max-width: none; padding: 0 10mm; }
+      .msg { break-inside: avoid; page-break-inside: avoid; border: 1px solid #ddd; background: #fff; }
+      .msg.user { break-after: avoid; page-break-after: avoid; }
+      .msg.assistant { break-before: avoid; page-break-before: avoid; }
+      .bubble.markdown pre { border: 1px solid #bbb; background: #fff; }
+      .print-header { display: block !important; font-size: 12px; color: #666; margin: 10px 0 16px; }
+      .model-tag { display: inline-block !important; }
+    }
+    .print-header { display: none; }
+
+    code, pre { font-family: var(--mono); }
+
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #ffffff30; border-top-color: #fff; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* History panel */
+    .history-panel {
+      position: fixed; top: 60px; right: 20px; width: 250px; max-height: 80vh;
+      background: var(--panel); border: 1px solid #2a2f3a; border-radius: var(--radius);
+      padding: 15px; overflow-y: auto; z-index: 100; display: none;
+    }
+    .history-panel h3 { margin-top: 0; color: var(--muted); font-size: 14px; }
+    .history-item { 
+      padding: 8px; margin: 5px 0; border-radius: 8px; cursor: pointer;
+      background: #1a1e25; border: 1px solid #2a2f3a;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .history-item:hover { background: #2a2f3a; }
+    .history-item.active { background: var(--accent); color: #04060a; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="left">
+        <label>API Base</label>
+        <input id="apiBase" type="text" value="http://localhost:1234/v1" size="26" />
+        <label>Model</label>
+        <select id="modelSelect">
+          <option value="">Loading models...</option>
+        </select>
+        <button class="btn ghost" id="refreshModels" title="Refresh models">↻</button>
+      </div>
+      <div class="right">
+        <button class="btn ghost" id="historyBtn" title="Chat History">📜 History</button>
+        <span class="status" id="status">
+          <span class="dot offline"></span>
+          <span class="statustext">Offline</span>
+        </span>
+        <span class="badge" id="modelBadge" title="Current model">model: —</span>
+        <button class="btn" id="printBtn" title="Print or Save as PDF">🖨 Print</button>
+        <button class="btn ghost" id="exportBtn" title="Export chat as Markdown">⬇︎ Export</button>
+        <button class="btn" id="newBtn" title="Start a new chat">＋ New</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Chat History Panel -->
+  <div class="history-panel" id="historyPanel">
+    <h3>Chat History</h3>
+    <div id="historyList"></div>
+  </div>
+
+  <main>
+    <div class="print-header" id="printHeader"></div>
+    <div class="session-meta">
+      <div>Title: <strong id="title">Untitled Chat</strong></div>
+      <div id="stamp"></div>
+    </div>
+    <div id="thread"></div>
+  </main>
+
+  <div class="composer">
+    <div class="wrap">
+      <textarea id="input" placeholder="Type a message… (Shift+Enter for newline)"></textarea>
+      <div class="actions">
+        <input id="systemPrompt" type="text" placeholder="System prompt (optional)" style="flex:1" />
+        <input id="apiKey" type="password" placeholder="API key (optional)" style="width: 14rem" />
+        <label>Temp <input id="temp" type="number" step="0.1" min="0" max="2" value="0.7"></label>
+        <label>MaxTokens <input id="maxT" type="number" step="1" min="1" value="100000"></label>
+        <label title="Live-format Markdown while streaming"><input type="checkbox" id="liveFmt" checked> Live format</label>
+        <div class="actions-inline" style="display:flex; gap:8px; align-items:center;">
+          <button class="btn primary" id="sendBtn">Send</button>
+          <button class="btn" id="stopBtn" disabled>Stop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Minimal state ---
+    const threadEl = document.getElementById('thread');
+    const inputEl = document.getElementById('input');
+    const sysEl = document.getElementById('systemPrompt');
+    const apiBaseEl = document.getElementById('apiBase');
+    const modelSelect = document.getElementById('modelSelect');
+    const apiKeyEl = document.getElementById('apiKey');
+    const tempEl = document.getElementById('temp');
+    const maxTEl = document.getElementById('maxT');
+    const liveFmtEl = document.getElementById('liveFmt');
+    const sendBtn = document.getElementById('sendBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const printBtn = document.getElementById('printBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const newBtn = document.getElementById('newBtn');
+    const titleEl = document.getElementById('title');
+    const stampEl = document.getElementById('stamp');
+    const printHeader = document.getElementById('printHeader');
+    const statusEl   = document.getElementById('status');
+    const modelBadge = document.getElementById('modelBadge');
+    const historyBtn = document.getElementById('historyBtn');
+    const historyPanel = document.getElementById('historyPanel');
+    const historyList = document.getElementById('historyList');
+
+    let messages = [];
+    let running = false;
+    let controller = null;
+    let currentModel = '';
+    let sessionId = null;
+    let chatHistory = [];
+    let mathjaxLoading = false;
+    let mathjaxPromise = null;
+
+    // --- Shadow buffer for double-buffered MathJax rendering ---
+    let shadowBuf = null, shadowBusy = false, shadowQueued = false;
+    function ensureShadow() {
+      if (shadowBuf) return shadowBuf;
+      shadowBuf = document.createElement('div');
+      shadowBuf.style.position = 'absolute';
+      shadowBuf.style.left = '-99999px';
+      shadowBuf.style.top = '0';
+      shadowBuf.className = 'bubble markdown';
+      document.body.appendChild(shadowBuf);
+      return shadowBuf;
+    }
+
+    // Generate unique session ID
+    function generateSessionId() {
+      return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    }
+
+    // Load all chat sessions from localStorage
+    function loadChatHistory() {
+      chatHistory = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('lmstudio_session_') && key !== 'lmstudio_session_id') {
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            if (data && data.title) {
+              chatHistory.push({
+                id: key.replace('lmstudio_session_', ''),
+                title: data.title,
+                timestamp: data.timestamp || new Date().toISOString()
+              });
+            }
+          } catch (e) {
+            console.error('Failed to parse session:', key, e);
+          }
+        }
+      }
+      chatHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      renderChatHistory();
+    }
+
+    // Render chat history panel
+    function renderChatHistory() {
+      historyList.innerHTML = '';
+      if (chatHistory.length === 0) {
+        historyList.innerHTML = '<div style="color:var(--muted);font-size:12px;">No chat history</div>';
+        return;
+      }
+      
+      chatHistory.forEach(session => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        if (sessionId === session.id) {
+          item.classList.add('active');
+        }
+        item.textContent = session.title || 'Untitled Chat';
+        item.title = session.title;
+        item.addEventListener('click', () => loadSession(session.id));
+        historyList.appendChild(item);
+      });
+    }
+
+    // Toggle history panel
+    historyBtn.addEventListener('click', () => {
+      historyPanel.style.display = historyPanel.style.display === 'block' ? 'none' : 'block';
+      if (historyPanel.style.display === 'block') {
+        loadChatHistory();
+      }
+    });
+
+    // Close history panel when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!historyPanel.contains(e.target) && 
+          e.target !== historyBtn && 
+          historyPanel.style.display === 'block') {
+        historyPanel.style.display = 'none';
+      }
+    });
+
+    // Load specific session
+    async function loadSession(sessionIdToLoad) {
+      if (running) {
+        alert('Please stop the current generation before loading a session');
+        return;
+      }
+      
+      const savedData = localStorage.getItem(`lmstudio_session_${sessionIdToLoad}`);
+      if (savedData) {
+        try {
+          const data = JSON.parse(savedData);
+          messages = data.messages || [];
+          titleEl.textContent = data.title || 'Untitled Chat';
+          if (data.systemPrompt) sysEl.value = data.systemPrompt;
+          if (data.model) modelSelect.value = data.model;
+          sessionId = sessionIdToLoad;
+          localStorage.setItem('lmstudio_session_id', sessionId);
+          await renderMessages();
+          historyPanel.style.display = 'none';
+          setStamp();
+          loadChatHistory();
+        } catch (e) {
+          console.error('Failed to load session:', e);
+          alert('Failed to load chat session');
+        }
+      }
+    }
+
+    // Load current session from localStorage
+    async function loadCurrentSession() {
+      const savedSessionId = localStorage.getItem('lmstudio_session_id');
+      if (savedSessionId) {
+        const savedData = localStorage.getItem(`lmstudio_session_${savedSessionId}`);
+        if (savedData) {
+          try {
+            const data = JSON.parse(savedData);
+            messages = data.messages || [];
+            titleEl.textContent = data.title || 'Untitled Chat';
+            if (data.systemPrompt) sysEl.value = data.systemPrompt;
+            if (data.model) modelSelect.value = data.model;
+            sessionId = savedSessionId;
+            await renderMessages();
+            return;
+          } catch (e) {
+            console.error('Failed to load session:', e);
+          }
+        }
+      }
+      
+      // Create new session if none exists
+      sessionId = generateSessionId();
+      localStorage.setItem('lmstudio_session_id', sessionId);
+      saveSession();
+    }
+
+    // Save session to localStorage
+    function saveSession() {
+      if (!sessionId) return;
+      
+      const data = {
+        messages: messages,
+        title: titleEl.textContent,
+        systemPrompt: sysEl.value,
+        model: modelSelect.value,
+        timestamp: new Date().toISOString()
+      };
+      
+      localStorage.setItem(`lmstudio_session_${sessionId}`, JSON.stringify(data));
+      loadChatHistory(); // Refresh history
+    }
+
+    // Utility: append message to DOM
+    function addMessage(role, content, modelInfo = null) {
+      const wrap = document.createElement('article');
+      wrap.className = `msg ${role}`;
+      const roleEl = document.createElement('div'); roleEl.className = 'role'; roleEl.textContent = role;
+      const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = content || '';
+      wrap.appendChild(roleEl); wrap.appendChild(bubble);
+      
+      // Add model info for assistant messages
+      if (role === 'assistant' && modelInfo) {
+        const modelTag = document.createElement('div');
+        modelTag.className = 'model-tag';
+        modelTag.textContent = `Model: ${modelInfo}`;
+        wrap.appendChild(modelTag);
+      }
+      
+      threadEl.appendChild(wrap);
+      return bubble; // return content node for streaming updates
+    }
+
+    // Render all messages with MathJax processing
+    async function renderMessages() {
+      threadEl.innerHTML = '';
+      const mathElements = [];
+      
+      for (const msg of messages) {
+        const bubble = addMessage(msg.role, msg.content, msg.model || currentModel || modelSelect.value);
+        bubble.innerHTML = renderMarkdown(msg.content);
+        bubble.classList.add('markdown');
+        if (containsMath(msg.content)) {
+          mathElements.push(bubble);
+        }
+      }
+      
+      if (mathElements.length > 0) {
+        await processMathElements(mathElements);
+      }
+    }
+
+    // Check if content contains math expressions
+    function containsMath(content) {
+      if ((/(^|[^$])\$(?!\$)[\s\S]*?(?<!\$)\$(?!\$)/).test(content)) return true; // inline $...$
+      return content.includes('$$') || content.includes('\\(') || content.includes('\\)') || content.includes('\\[') || content.includes('\\]');
+    }
+
+    // Process MathJax for multiple elements
+    async function processMathElements(elements) {
+      if (elements.length === 0) return;
+      if (!window.MathJax) {
+        try { await ensureMathJax(); } catch (e) { console.warn('MathJax failed to load:', e); return; }
+      }
+      try { await MathJax.typesetPromise(elements); } catch (e) { console.warn('MathJax typesetting warning:', e); }
+    }
+
+    function isNearBottom() {
+      return window.innerHeight + window.scrollY >= document.body.scrollHeight - 100;
+    }
+    function scrollToBottomIfNeeded() {
+      if (isNearBottom()) window.scrollTo({ top: document.body.scrollHeight });
+    }
+
+    function setStamp() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      stampEl.textContent = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const modelForPrint = currentModel || (modelSelect.value || 'lmstudio');
+      printHeader.textContent = `Transcript — ${titleEl.textContent} — Model: ${modelForPrint} — printed ${stampEl.textContent}`;
+    }
+
+    // Export as Markdown
+    function exportMarkdown() {
+      const lines = [];
+      const modelForPrint = currentModel || (modelSelect.value || 'lmstudio');
+      lines.push(`# Transcript — ${titleEl.textContent}`);
+      lines.push("");
+      lines.push(`Model: ${modelForPrint}`);
+      lines.push(`Printed: ${stampEl.textContent}`);
+      lines.push("");
+      for (const m of messages) {
+        lines.push(`### ${m.role.toUpperCase()}`);
+        lines.push('');
+        lines.push(m.content);
+        lines.push('');
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (titleEl.textContent || 'chat') + '.md';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // Fetch models for convenience (LM Studio exposes OpenAI-compatible /v1/models)
+    async function refreshModels(keepCurrent = true) {
+      const currentValue = modelSelect.value;
+      modelSelect.innerHTML = '<option value="">Loading models...</option>';
+      
+      try {
+        const res = await fetch(apiBaseEl.value.replace(/\/$/, '') + '/models');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const models = data.data || [];
+        
+        modelSelect.innerHTML = '';
+        if (models.length === 0) {
+          modelSelect.innerHTML = '<option value="">No models found</option>';
+          return;
+        }
+        
+        models.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.id;
+          modelSelect.appendChild(opt);
+        });
+        
+        if (keepCurrent && currentValue && models.some(m => m.id === currentValue)) {
+          modelSelect.value = currentValue;
+        } else if (!modelSelect.value && models.length > 0) {
+          modelSelect.value = models[0].id;
+        }
+        
+        updateModelBadge(modelSelect.value);
+      } catch (e) {
+        console.warn('Model list failed:', e);
+        modelSelect.innerHTML = '<option value="">Failed to load models</option>';
+      }
+    }
+
+    // --- Connection & model status ---
+    function updateModelBadge(model){
+      currentModel = model || '';
+      if(modelBadge) modelBadge.textContent = 'model: ' + (currentModel || '—');
+      setStamp();
+    }
+    function setStatus(mode, text){
+      if(!statusEl) return;
+      const dot = statusEl.querySelector('.dot');
+      const t   = statusEl.querySelector('.statustext');
+      dot.classList.remove('online','offline','busy');
+      dot.classList.add(mode);
+      t.textContent = text;
+    }
+    async function checkConnection(){
+      const url = apiBaseEl.value.replace(/\/$/, '') + '/models';
+      const ac = new AbortController();
+      const to = setTimeout(()=>ac.abort(), 3500);
+      try {
+        const res = await fetch(url, {signal: ac.signal});
+        clearTimeout(to);
+        setStatus(res.ok ? 'online' : 'offline', res.ok ? 'Connected' : 'Offline');
+      } catch {
+        setStatus('offline','Offline');
+      }
+    }
+
+    // --- Markdown + LaTeX (MathJax) ---
+    function escapeHtml(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+    function renderMarkdown(src){
+  // 1) Stash all math so markdown doesn’t touch it
+  let s = '\n' + src.replace(/\r/g,'');
+  const stash = [];
+  const STUB = i => `@@MATH${i}@@`;
+
+  // $$ ... $$ (block)
+  s = s.replace(/\$\$[\s\S]*?\$\$/g, (m) => { stash.push(m); return STUB(stash.length-1); });
+  // \[ ... \] (block)
+  s = s.replace(/\\\[[\s\S]*?\\\]/g, (m) => { stash.push(m); return STUB(stash.length-1); });
+  // \( ... \) (inline)
+  s = s.replace(/\\\([\s\S]*?\\\)/g, (m) => { stash.push(m); return STUB(stash.length-1); });
+  // $ ... $ (inline, not $$)
+  s = s.replace(/(^|[^$])\$(?!\$)([\s\S]*?)(?<!\$)\$(?!\$)/g,
+    (m, pre, body) => pre + (stash.push(`$${body}$`), STUB(stash.length-1))
+  );
+
+  // 2) Escape HTML in the *non-math* text
+  s = s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  // 3) Lightweight markdown on the non-math text
+  s = s.replace(/```([\s\S]*?)```/g, (m,p1)=>'<pre><code>'+p1.replace(/\n$/,'')+'</code></pre>');
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/^\n######\s*(.*)$/gm,'<h6>$1</h6>')
+       .replace(/^\n#####\s*(.*)$/gm,'<h5>$1</h5>')
+       .replace(/^\n####\s*(.*)$/gm,'<h4>$1</h4>')
+       .replace(/^\n###\s*(.*)$/gm, '<h3>$1</h3>')
+       .replace(/^\n##\s*(.*)$/gm,  '<h2>$1</h2>')
+       .replace(/^\n#\s*(.*)$/gm,   '<h1>$1</h1>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+       .replace(/\*([^*]+)\*/g,   '<em>$1</em>');
+  s = s.replace(/\b(https?:\/\/[^\s)]+)\b/g, (m)=>`<a href="${m}" target="_blank" rel="noopener">${m}</a>`);
+  // NOTE: this list rule will no longer hit math because math is stashed
+  s = s.replace(/\n\s*[-*]\s+(.+)(?=\n(?![-*]\s)|$)/g, m => 
+        '<ul>'+m.trim().split(/\n\s*[-*]\s+/).filter(Boolean).map(x=>'<li>'+x+'</li>').join('')+'</ul>');
+  s = s.replace(/\n{2,}/g,'</p><p>');
+
+  // 4) Restore math
+  s = s.replace(/@@MATH(\d+)@@/g, (_,i)=>stash[+i]);
+
+  return '<p>'+s.trim()+'</p>';
+}
+
+
+    function ensureMathJax(){
+      if (window.MathJax) return Promise.resolve();
+      if (mathjaxPromise) return mathjaxPromise;
+
+      // Configure BEFORE loading the script
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$','$$'], ['\\[','\\]']],
+          processEscapes: true
+        },
+        options: {
+          skipHtmlTags: ['script','noscript','style','textarea','pre','code']
+        }
+      };
+
+      mathjaxLoading = true;
+      mathjaxPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+        script.onload = () => { mathjaxLoading = false; resolve(); };
+        script.onerror = () => { mathjaxLoading = false; mathjaxPromise = null; reject(new Error('Failed to load MathJax')); };
+        document.head.appendChild(script);
+      });
+      return mathjaxPromise;
+    }
+
+    // Stream reader for OpenAI-compatible responses (SSE-like lines)
+    async function* streamLines(reader) {
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 1);
+          if (!line) continue;
+          if (line.startsWith('data:')) {
+            const payload = line.slice(5).trimStart();
+            yield payload;
+          }
+        }
+      }
+      if (buffer.trim()) yield buffer.trim();
+    }
+
+    // Send message
+    async function send() {
+      if (running) return;
+      const userText = inputEl.value.trim();
+      if (!userText) return;
+
+      setStamp();
+      running = true;
+      sendBtn.disabled = true; stopBtn.disabled = false;
+      setStatus('busy','Querying');
+      updateModelBadge(modelSelect.value || 'lmstudio');
+
+      if (messages.length === 0 && sysEl.value.trim()) {
+        messages.push({ role: 'system', content: sysEl.value.trim() });
+        const sysNode = addMessage('system', sysEl.value.trim());
+        sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
+        sysNode.classList.add('markdown');
+      }
+
+      messages.push({ role: 'user', content: userText });
+      const userNode = addMessage('user', userText);
+      userNode.innerHTML = renderMarkdown(userText);
+      userNode.classList.add('markdown');
+      inputEl.value = '';
+      saveSession();
+
+      const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
+
+      // prepare request
+      const payload = {
+        model: modelSelect.value || 'lmstudio',
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        stream: true,
+        temperature: Number(tempEl.value || 0.7),
+        max_tokens: Number(maxTEl.value || 100000)
+      };
+
+      const headers = { 'Content-Type': 'application/json' };
+      const key = apiKeyEl.value.trim();
+      if (key) headers['Authorization'] = 'Bearer ' + key;
+
+      const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
+      controller = new AbortController();
+
+      let assistantAccum = '';
+      let pendingChunk = '';
+      let scheduled = false;
+      let lastRenderTime = 0;
+      let currentStreamingModel = modelSelect.value || 'lmstudio';
+      
+      const flush = () => {
+        // allow future scheduling
+        scheduled = false;
+        if (!pendingChunk) return;
+
+        assistantAccum += pendingChunk;
+        pendingChunk = '';
+
+        const now = Date.now();
+        // throttle updates to let MathJax breathe
+        if (now - lastRenderTime < 30) {
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(flush);
+          }
+          return;
+        }
+        lastRenderTime = now;
+
+        if (!(liveFmtEl && liveFmtEl.checked)) {
+          assistantNode.textContent = assistantAccum;
+          scrollToBottomIfNeeded();
+          return;
+        }
+
+        // Double-buffered render: build off-screen, typeset there, then swap
+        const shadow = ensureShadow();
+
+        // If a typeset is running, queue and bail; we'll re-run flush after it completes
+        if (shadowBusy) {
+          shadowQueued = true;
+          return;
+        }
+        shadowBusy = true;
+
+        shadow.innerHTML = renderMarkdown(assistantAccum);
+
+        const doTypeset = async () => {
+          try {
+            await ensureMathJax();
+            await MathJax.typesetPromise([shadow]);
+          } catch (e) {
+            console.warn('MathJax typeset (shadow) failed:', e);
+          } finally {
+            // Atomic swap
+            assistantNode.innerHTML = shadow.innerHTML;
+            assistantNode.classList.add('markdown');
+            scrollToBottomIfNeeded();
+            shadowBusy = false;
+
+            if (shadowQueued) {
+              shadowQueued = false;
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+          }
+        };
+        doTypeset();
+      };
+
+      try {
+        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
+        if (!res.ok || !res.body) {
+          const msg = `Request failed: HTTP ${res.status}`;
+          assistantNode.innerHTML = `<span class="error">${msg}</span>`;
+          throw new Error(msg);
+        }
+        for await (const raw of streamLines(res.body.getReader())) {
+          if (raw === '[DONE]') break;
+          try {
+            const obj = JSON.parse(raw);
+            const choice = obj.choices?.[0];
+            if (obj.model) {
+              updateModelBadge(obj.model);
+              currentStreamingModel = obj.model;
+            }
+            const delta = choice?.delta || choice; // support both chat.delta and plain text
+            const token = delta?.content || delta?.text || '';
+            if (!token) continue;
+            pendingChunk += token;
+            if (!scheduled) {
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+          } catch {
+            continue; // keep-alives/comments
+          }
+        }
+        setStatus('online','Connected');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          pendingChunk += '\n\n[stopped]';
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(flush);
+          }
+          setStatus('online','Stopped');
+        } else {
+          const em = `\n\n[error] ${err.message}`;
+          pendingChunk += em;
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(flush);
+          }
+          setStatus('offline','Offline');
+        }
+      } finally {
+        // finalize assistant message in state using the same shadow swap
+        if (pendingChunk) {
+          // ensure last chunk makes it in
+          assistantAccum += pendingChunk;
+          pendingChunk = '';
+        }
+
+        // final render via double-buffer path
+        const shadow = ensureShadow();
+        shadow.innerHTML = renderMarkdown(assistantAccum);
+        try {
+          await ensureMathJax();
+          await MathJax.typesetPromise([shadow]);
+        } catch (e) {
+          console.warn('Final MathJax typeset failed:', e);
+        }
+        assistantNode.innerHTML = shadow.innerHTML;
+        assistantNode.classList.add('markdown');
+
+        messages.push({ 
+          role: 'assistant', 
+          content: assistantAccum,
+          model: currentStreamingModel
+        });
+        
+        running = false;
+        sendBtn.disabled = false; stopBtn.disabled = true;
+        controller = null;
+        saveSession();
+      }
+    }
+
+    // Handlers
+    sendBtn.addEventListener('click', send);
+    stopBtn.addEventListener('click', () => { if (controller) controller.abort(); });
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); send();
+      }
+    });
+
+    exportBtn.addEventListener('click', exportMarkdown);
+    printBtn.addEventListener('click', () => window.print());
+    newBtn.addEventListener('click', () => {
+      if (running) return;
+      if (!confirm('Start a new chat? Current transcript will be cleared.')) return;
+      messages = [];
+      threadEl.innerHTML = '';
+      titleEl.textContent = 'Untitled Chat';
+      sessionId = generateSessionId();
+      localStorage.setItem('lmstudio_session_id', sessionId);
+      saveSession();
+      setStamp();
+    });
+
+    // Title from first user line
+    const titleObserver = new MutationObserver(() => {
+      const firstUser = messages.find(m => m.role === 'user');
+      if (firstUser && titleEl.textContent === 'Untitled Chat') {
+        titleEl.textContent = firstUser.content.slice(0, 60).replace(/\s+/g,' ').trim();
+        saveSession();
+      }
+    });
+    titleObserver.observe(threadEl, { childList: true, subtree: true });
+
+    // helpers
+    document.getElementById('refreshModels').addEventListener('click', () => refreshModels(false));
+    
+    // Model selection change handler
+    modelSelect.addEventListener('change', () => {
+      updateModelBadge(modelSelect.value);
+      saveSession();
+    });
+    
+    refreshModels();
+    updateModelBadge(modelSelect.value);
+    setStamp();
+    checkConnection();
+    setInterval(checkConnection, 15000);
+    window.addEventListener('online',  ()=>setStatus('online','Online'));
+    window.addEventListener('offline', ()=>setStatus('offline','Offline'));
+
+    // Auto-focus composer
+    setTimeout(() => inputEl.focus(), 50);
+
+    // Load session on startup
+    loadCurrentSession();
+    loadChatHistory();
+
+    // Save session when system prompt changes
+    sysEl.addEventListener('blur', saveSession);
+  </script>
+</body>
+</html>
