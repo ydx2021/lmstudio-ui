@@ -80,6 +80,41 @@
   margin-top: 0; 
 }
 
+pre {
+  overflow: auto;         /* allow scrolling */
+  white-space: pre;       /* preserve spacing */
+  max-height: 400px;      /* or whatever fits your layout */
+}
+
+pre {
+  position: relative; /* so button can be positioned */
+  padding-top: 2em;   /* space for button */
+}
+
+.copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.8em;
+  padding: 2px 6px;
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.copy-btn:hover {
+  opacity: 1;
+}
+
+
+pre code {
+  display: block;         /* ensures full width */
+}
+
+
 /* Space the bubble below the meta row */
 .msg .bubble { margin-top: 6px; }
 
@@ -187,6 +222,8 @@
 
 
   </style>
+ <script src="https://cdn.jsdelivr.net/npm/gpt-tokenizer@1.0.0/dist/index.min.js"></script>
+
 </head>
 <body>
   <header>
@@ -472,6 +509,7 @@
         const bubble = addMessage(msg.role, msg.content, msg.model || currentModel || modelSelect.value);
         bubble.innerHTML = renderMarkdown(msg.content);
         bubble.classList.add('markdown');
+        addCopyButtons(bubble);
         if (containsMath(msg.content)) {
           mathElements.push(bubble);
         }
@@ -601,48 +639,84 @@
 
     // --- Markdown + LaTeX (MathJax) ---
     function escapeHtml(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
-    function renderMarkdown(src){
-  // 1) Stash all math so markdown doesn’t touch it
-  let s = '\n' + src.replace(/\r/g,'');
-  const stash = [];
-  const STUB = i => `@@MATH${i}@@`;
 
-  // $$ ... $$ (block)
-  s = s.replace(/\$\$[\s\S]*?\$\$/g, (m) => { stash.push(m); return STUB(stash.length-1); });
-  // \[ ... \] (block)
-  s = s.replace(/\\\[[\s\S]*?\\\]/g, (m) => { stash.push(m); return STUB(stash.length-1); });
-  // \( ... \) (inline)
-  s = s.replace(/\\\([\s\S]*?\\\)/g, (m) => { stash.push(m); return STUB(stash.length-1); });
-  // $ ... $ (inline, not $$)
-  s = s.replace(/(^|[^$])\$(?!\$)([\s\S]*?)(?<!\$)\$(?!\$)/g,
-    (m, pre, body) => pre + (stash.push(`$${body}$`), STUB(stash.length-1))
-  );
+    function addCopyButtons(container) {
+      container.querySelectorAll('pre').forEach(pre => {
+        // avoid duplicates if re-rendered
+        if (pre.querySelector('.copy-btn')) return;
 
-  // 2) Escape HTML in the *non-math* text
-  s = s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = 'Copy';
+        btn.addEventListener('click', () => {
+          const code = pre.innerText; // preserves visible formatting
+          navigator.clipboard.writeText(code).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+          }).catch(err => {
+            console.error('Copy failed', err);
+            btn.textContent = 'Error';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+          });
+        });
 
-  // 3) Lightweight markdown on the non-math text
-  s = s.replace(/```([\s\S]*?)```/g, (m,p1)=>'<pre><code>'+p1.replace(/\n$/,'')+'</code></pre>');
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  s = s.replace(/^\n######\s*(.*)$/gm,'<h6>$1</h6>')
-       .replace(/^\n#####\s*(.*)$/gm,'<h5>$1</h5>')
-       .replace(/^\n####\s*(.*)$/gm,'<h4>$1</h4>')
-       .replace(/^\n###\s*(.*)$/gm, '<h3>$1</h3>')
-       .replace(/^\n##\s*(.*)$/gm,  '<h2>$1</h2>')
-       .replace(/^\n#\s*(.*)$/gm,   '<h1>$1</h1>');
-  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-       .replace(/\*([^*]+)\*/g,   '<em>$1</em>');
-  s = s.replace(/\b(https?:\/\/[^\s)]+)\b/g, (m)=>`<a href="${m}" target="_blank" rel="noopener">${m}</a>`);
-  // NOTE: this list rule will no longer hit math because math is stashed
-  s = s.replace(/\n\s*[-*]\s+(.+)(?=\n(?![-*]\s)|$)/g, m => 
-        '<ul>'+m.trim().split(/\n\s*[-*]\s+/).filter(Boolean).map(x=>'<li>'+x+'</li>').join('')+'</ul>');
-  s = s.replace(/\n{2,}/g,'</p><p>');
+        pre.appendChild(btn);
+      });
+    }
 
-  // 4) Restore math
-  s = s.replace(/@@MATH(\d+)@@/g, (_,i)=>stash[+i]);
+    function renderMarkdown(src) {
+        let s = '\n' + (src || '').replace(/\r/g, '');
+        const stash = [];
+        const STUB = i => `@@STUB${i}@@`;   // <— use one marker consistently
 
-  return '<p>'+s.trim()+'</p>';
-}
+        const push = (html) => (stash.push(html), STUB(stash.length - 1));
+
+        // --- stash math ---
+        s = s.replace(/\$\$[\s\S]*?\$\$/g, m => push(m));
+        s = s.replace(/\\\[[\s\S]*?\\\]/g, m => push(m));
+        s = s.replace(/\\\([\s\S]*?\\\)/g, m => push(m));
+        s = s.replace(/(^|[^$])\$(?!\$)([\s\S]*?)(?<!\$)\$(?!\$)/g,
+          (m, pre, body) => pre + push(`$${body}$`));
+
+        // --- fenced code first, then inline code (both stashed) ---
+        s = s.replace(/```([\w+-]*)\n([\s\S]*?)```/g, (m, lang, code) => {
+          const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+          const cls = lang ? ` class="language-${lang}"` : '';
+          return push(`<pre><code${cls}>${esc.replace(/\n$/, '')}</code></pre>`);
+        });
+        s = s.replace(/`([^`]+)`/g, (m, code) => {
+          const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+          return push(`<code>${esc}</code>`);
+        });
+
+        // --- escape only non-stashed text ---
+        s = s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+        // --- lightweight markdown on non-code/math ---
+        s = s.replace(/^\n######\s*(.*)$/gm, '<h6>$1</h6>')
+          .replace(/^\n#####\s*(.*)$/gm, '<h5>$1</h5>')
+          .replace(/^\n####\s*(.*)$/gm, '<h4>$1</h4>')
+          .replace(/^\n###\s*(.*)$/gm, '<h3>$1</h3>')
+          .replace(/^\n##\s*(.*)$/gm, '<h2>$1</h2>')
+          .replace(/^\n#\s*(.*)$/gm, '<h1>$1</h1>')
+          .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+          .replace(/\b(https?:\/\/[^\s)]+)\b/g, m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`)
+          .replace(/(?:^|\n)(-\s+.+)(?=\n[^-\s]|$)/g, block => {
+            const items = block.trim().split(/\n-\s+/).filter(Boolean)
+              .map((x, i) => i === 0 ? x.replace(/^-+\s*/, '') : x);
+            return '\n<ul>' + items.map(x => `<li>${x}</li>`).join('') + '</ul>';
+          })
+          .replace(/\n{2,}/g, '</p><p>');
+
+        // --- restore stashed content (defensively handle both prefixes) ---
+        s = s.replace(/@@STUB(\d+)@@/g, (_, i) => stash[+i])
+          .replace(/@@MATH(\d+)@@/g, (_, i) => stash[+i] ?? ''); // if any old MATH tokens linger
+
+        return '<p>' + s.trim() + '</p>';
+      }
+
+
 
 
     function ensureMathJax(){
@@ -780,6 +854,7 @@
         shadowBusy = true;
 
         shadow.innerHTML = renderMarkdown(assistantAccum);
+      
 
         const doTypeset = async () => {
           try {
@@ -804,6 +879,8 @@
         doTypeset();
       };
 
+      const startTime = Date.now(); // NEW: mark start time
+      let completionTokens = 0; // NEW
       try {
         const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
         if (!res.ok || !res.body) {
@@ -815,6 +892,9 @@
           if (raw === '[DONE]') break;
           try {
             const obj = JSON.parse(raw);
+            if (obj.usage?.completion_tokens) { // NEW
+              completionTokens = obj.usage.completion_tokens;
+            }
             const choice = obj.choices?.[0];
             if (obj.model) {
               updateModelBadge(obj.model);
@@ -851,6 +931,10 @@
           setStatus('offline','Offline');
         }
       } finally {
+
+        const endTime = Date.now();             // NEW: mark end time
+        const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
+        
         // finalize assistant message in state using the same shadow swap
         if (pendingChunk) {
           // ensure last chunk makes it in
@@ -867,12 +951,42 @@
         } catch (e) {
           console.warn('Final MathJax typeset failed:', e);
         }
-        assistantNode.innerHTML = shadow.innerHTML;
+        // NEW: count tokens from accumulated text
+
+        function smartTokenEstimate(text) {
+          if (!text || text.trim().length === 0) return 0;
+          
+          // Count different types of characters
+          const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+          const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
+          const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
+          
+          // Count ASCII and other characters
+          const otherChars = text.length - chineseChars - japaneseChars - koreanChars;
+          const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
+          
+          // Asian characters are typically 1 token each
+          const asianTokens = chineseChars + japaneseChars + koreanChars;
+          
+          // Other characters use the old heuristic
+          const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
+
+          return asianTokens + otherTokens + specialChars;
+      }
+
+      const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
+      
+
+        const tps = elapsedSec > 0 ? (tokenCount / elapsedSec).toFixed(2) : '—';
+        const statsLine = `<div style="font-size:12px;color:var(--muted)">Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tps} tokens/sec</div>`;
+
+        assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
         assistantNode.classList.add('markdown');
+        addCopyButtons(assistantNode);
 
         messages.push({ 
           role: 'assistant', 
-          content: assistantAccum,
+          content: assistantAccum + `\n\n[Stats] Tokens: ${tokenCount}, Time: ${elapsedSec.toFixed(2)}s, ${tps} tokens/sec`,
           model: currentStreamingModel
         });
         
