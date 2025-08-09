@@ -166,6 +166,12 @@ pre code {
       .bubble.markdown pre { border: 1px solid #bbb; background: #fff; }
       .print-header { display: block !important; font-size: 12px; color: #666; margin: 10px 0 16px; }
       .model-tag { display: inline-block !important; }
+
+      pre {
+        max-height: none !important; /* remove height restriction */
+        overflow: visible !important; /* show all lines */
+        white-space: pre-wrap !important; /* optional: wrap long lines on paper */
+      }
     }
     .print-header { display: none; }
 
@@ -188,6 +194,55 @@ pre code {
     }
     .history-item:hover { background: #2a2f3a; }
     .history-item.active { background: var(--accent); color: #04060a; }
+
+    /* History list row: title + delete button */
+.history-item {
+  display: flex;              /* lay out title + button */
+  align-items: center;
+  gap: 8px;
+}
+.history-title {
+  flex: 1;
+  min-width: 0;               /* allow ellipsis to work in flex item */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-del {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;            /* size of the ❌ */
+  line-height: 1;
+  opacity: 0.7;
+}
+.history-del:hover { opacity: 1; transform: scale(1.05); }
+.history-item.active .history-del { color: #04060a; }  /* visible on active bg */
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 8px;
+}
+.history-clear {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #ff6b6b;       /* matches the red X vibe */
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0.85;
+}
+.history-clear:hover {
+  background: rgba(255, 107, 107, 0.12);
+  opacity: 1;
+}
+
+
 
     /* Compact header tweaks */
 .bar { gap: 6px; }
@@ -371,26 +426,114 @@ pre code {
       renderChatHistory();
     }
 
-    // Render chat history panel
-    function renderChatHistory() {
-      historyList.innerHTML = '';
-      if (chatHistory.length === 0) {
-        historyList.innerHTML = '<div style="color:var(--muted);font-size:12px;">No chat history</div>';
-        return;
+  // Render chat history panel
+  function renderChatHistory() {
+    historyList.innerHTML = '';
+
+
+    // --- header with "Delete all" ---
+    const header = document.createElement('div');
+    header.className = 'history-header';
+
+    const label = document.createElement('div');
+    label.textContent = 'History';
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'history-clear';
+    clearBtn.type = 'button';
+    clearBtn.textContent = '❌ Delete all';
+    clearBtn.title = 'Delete all chats';
+    clearBtn.setAttribute('aria-label', 'Delete all chats');
+    clearBtn.addEventListener('click', () => {
+      if (!confirm('Delete ALL chats permanently?')) return;
+
+      // remove all saved sessions
+      const keysToDelete = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('lmstudio_session_')) keysToDelete.push(k);
       }
-      
-      chatHistory.forEach(session => {
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        if (sessionId === session.id) {
-          item.classList.add('active');
-        }
-        item.textContent = session.title || 'Untitled Chat';
-        item.title = session.title;
-        item.addEventListener('click', () => loadSession(session.id));
-        historyList.appendChild(item);
-      });
+      keysToDelete.forEach(k => localStorage.removeItem(k));
+
+      // clear current selection + UI
+      localStorage.removeItem('lmstudio_session_id');
+      if (typeof sessionId !== 'undefined') sessionId = null;
+      if (typeof chatHistory !== 'undefined') chatHistory = [];
+      const threadEl = document.getElementById('thread');
+      if (threadEl) threadEl.innerHTML = '';
+      const titleEl = document.getElementById('title');
+      if (titleEl) titleEl.textContent = 'Untitled Chat';
+
+      // refresh the list
+      if (typeof loadChatHistory === 'function') {
+        loadChatHistory();          // rebuilds chatHistory, then calls renderChatHistory
+      } else {
+        renderChatHistory();        // fallback if you call this directly
+      }
+    });
+
+    header.appendChild(label);
+    header.appendChild(clearBtn);
+    historyList.appendChild(header);
+
+    // --- existing "no chat" empty state remains the same ---
+    if (!chatHistory || chatHistory.length === 0) {
+      historyList.insertAdjacentHTML(
+        'beforeend',
+        '<div style="color:var(--muted);font-size:12px;">No chat history</div>'
+      );
+      return;
     }
+    if (chatHistory.length === 0) {
+      historyList.innerHTML = '<div style="color:var(--muted);font-size:12px;">No chat history</div>';
+      return;
+    }
+
+    chatHistory.forEach(session => {
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      if (sessionId === session.id) item.classList.add('active');
+
+      // --- title (click to load) ---
+      const title = document.createElement('div');
+      title.className = 'history-title';
+      title.textContent = session.title || 'Untitled Chat';
+      title.title = session.title || 'Untitled Chat';
+      title.addEventListener('click', () => loadSession(session.id));
+
+      // --- delete button (❌) ---
+      const del = document.createElement('button');
+      del.className = 'history-del';
+      del.type = 'button';
+      del.textContent = '❌';        // Unicode red X
+      del.title = 'Delete this chat';
+      del.setAttribute('aria-label', 'Delete this chat');
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();         // don’t trigger load
+        const ok = confirm('Delete this chat permanently?');
+        if (!ok) return;
+
+        // Remove from storage
+        localStorage.removeItem(`lmstudio_session_${session.id}`);
+
+        // If deleting the current session, clear the view and reset sessionId
+        if (sessionId === session.id) {
+          sessionId = null;
+          localStorage.removeItem('lmstudio_session_id');
+          document.getElementById('thread').innerHTML = '';
+          document.getElementById('title').textContent = 'Untitled Chat';
+        }
+
+        // Refresh the list
+        loadChatHistory();
+      });
+
+      item.appendChild(title);
+      item.appendChild(del);
+      historyList.appendChild(item);
+    });
+  }
+
 
     // Toggle history panel
     historyBtn.addEventListener('click', () => {
@@ -502,23 +645,35 @@ pre code {
 
     // Render all messages with MathJax processing
     async function renderMessages() {
-      threadEl.innerHTML = '';
-      const mathElements = [];
-      
-      for (const msg of messages) {
-        const bubble = addMessage(msg.role, msg.content, msg.model || currentModel || modelSelect.value);
-        bubble.innerHTML = renderMarkdown(msg.content);
-        bubble.classList.add('markdown');
-        addCopyButtons(bubble);
-        if (containsMath(msg.content)) {
-          mathElements.push(bubble);
+        threadEl.innerHTML = '';
+        const mathElements = [];
+
+        for (const msg of messages) {
+          const bubble = addMessage(msg.role, msg.content, msg.model || currentModel || modelSelect.value);
+          bubble.innerHTML = renderMarkdown(msg.content);
+          bubble.classList.add('markdown');
+          addCopyButtons(bubble);
+          if (containsMath(msg.content)) {
+            mathElements.push(bubble);
+          }
+          if (msg.stats) {
+            const { tokens, timeSec, tps } = msg.stats;
+            const existing = bubble.querySelector('.stats-line');
+            if (existing) existing.remove();
+            bubble.insertAdjacentHTML(
+              'beforeend',
+              `<div class="stats-line" style="font-size:12px;color:var(--muted)">
+      Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps.toFixed(2)} tokens/sec
+     </div>`
+            );
+          }
+
+        }
+
+        if (mathElements.length > 0) {
+          await processMathElements(mathElements);
         }
       }
-      
-      if (mathElements.length > 0) {
-        await processMathElements(mathElements);
-      }
-    }
 
     // Check if content contains math expressions
     function containsMath(content) {
@@ -770,232 +925,241 @@ pre code {
 
     // Send message
     async function send() {
-      if (running) return;
-      const userText = inputEl.value.trim();
-      if (!userText) return;
+        if (running) return;
+        const userText = inputEl.value.trim();
+        if (!userText) return;
 
-      setStamp();
-      running = true;
-      sendBtn.disabled = true; stopBtn.disabled = false;
-      setStatus('busy','Querying');
-      updateModelBadge(modelSelect.value || 'lmstudio');
+        setStamp();
+        running = true;
+        sendBtn.disabled = true; stopBtn.disabled = false;
+        setStatus('busy', 'Querying');
+        updateModelBadge(modelSelect.value || 'lmstudio');
 
-      if (messages.length === 0 && sysEl.value.trim()) {
-        messages.push({ role: 'system', content: sysEl.value.trim() });
-        const sysNode = addMessage('system', sysEl.value.trim());
-        sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
-        sysNode.classList.add('markdown');
-      }
-
-      messages.push({ role: 'user', content: userText });
-      const userNode = addMessage('user', userText);
-      userNode.innerHTML = renderMarkdown(userText);
-      userNode.classList.add('markdown');
-      inputEl.value = '';
-      saveSession();
-
-      const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
-
-      // prepare request
-      const payload = {
-        model: modelSelect.value || 'lmstudio',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        stream: true,
-        temperature: Number(tempEl.value || 0.7),
-        max_tokens: Number(maxTEl.value || 100000)
-      };
-
-      const headers = { 'Content-Type': 'application/json' };
-      const key = apiKeyEl.value.trim();
-      if (key) headers['Authorization'] = 'Bearer ' + key;
-
-      const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
-      controller = new AbortController();
-
-      let assistantAccum = '';
-      let pendingChunk = '';
-      let scheduled = false;
-      let lastRenderTime = 0;
-      let currentStreamingModel = modelSelect.value || 'lmstudio';
-      
-      const flush = () => {
-        // allow future scheduling
-        scheduled = false;
-        if (!pendingChunk) return;
-
-        assistantAccum += pendingChunk;
-        pendingChunk = '';
-
-        const now = Date.now();
-        // throttle updates to let MathJax breathe
-        if (now - lastRenderTime < 30) {
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
-          }
-          return;
-        }
-        lastRenderTime = now;
-
-        if (!(liveFmtEl && liveFmtEl.checked)) {
-          assistantNode.textContent = assistantAccum;
-          scrollToBottomIfNeeded();
-          return;
+        if (messages.length === 0 && sysEl.value.trim()) {
+          messages.push({ role: 'system', content: sysEl.value.trim() });
+          const sysNode = addMessage('system', sysEl.value.trim());
+          sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
+          sysNode.classList.add('markdown');
         }
 
-        // Double-buffered render: build off-screen, typeset there, then swap
-        const shadow = ensureShadow();
+        messages.push({ role: 'user', content: userText });
+        const userNode = addMessage('user', userText);
+        userNode.innerHTML = renderMarkdown(userText);
+        userNode.classList.add('markdown');
+        inputEl.value = '';
+        saveSession();
 
-        // If a typeset is running, queue and bail; we'll re-run flush after it completes
-        if (shadowBusy) {
-          shadowQueued = true;
-          return;
-        }
-        shadowBusy = true;
+        const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
 
-        shadow.innerHTML = renderMarkdown(assistantAccum);
-      
-
-        const doTypeset = async () => {
-          try {
-            await ensureMathJax();
-            await MathJax.typesetPromise([shadow]);
-          } catch (e) {
-            console.warn('MathJax typeset (shadow) failed:', e);
-          } finally {
-            // Atomic swap
-            assistantNode.innerHTML = shadow.innerHTML;
-            assistantNode.classList.add('markdown');
-            scrollToBottomIfNeeded();
-            shadowBusy = false;
-
-            if (shadowQueued) {
-              shadowQueued = false;
-              scheduled = true;
-              requestAnimationFrame(flush);
-            }
-          }
+        // prepare request
+        const payload = {
+          model: modelSelect.value || 'lmstudio',
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          stream: true,
+          temperature: Number(tempEl.value || 0.7),
+          max_tokens: Number(maxTEl.value || 100000)
         };
-        doTypeset();
-      };
 
-      const startTime = Date.now(); // NEW: mark start time
-      let completionTokens = 0; // NEW
-      try {
-        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
-        if (!res.ok || !res.body) {
-          const msg = `Request failed: HTTP ${res.status}`;
-          assistantNode.innerHTML = `<span class="error">${msg}</span>`;
-          throw new Error(msg);
-        }
-        for await (const raw of streamLines(res.body.getReader())) {
-          if (raw === '[DONE]') break;
-          try {
-            const obj = JSON.parse(raw);
-            if (obj.usage?.completion_tokens) { // NEW
-              completionTokens = obj.usage.completion_tokens;
-            }
-            const choice = obj.choices?.[0];
-            if (obj.model) {
-              updateModelBadge(obj.model);
-              currentStreamingModel = obj.model;
-            }
-            const delta = choice?.delta || choice; // support both chat.delta and plain text
-            const token = delta?.content || delta?.text || '';
-            if (!token) continue;
-            pendingChunk += token;
+        const headers = { 'Content-Type': 'application/json' };
+        const key = apiKeyEl.value.trim();
+        if (key) headers['Authorization'] = 'Bearer ' + key;
+
+        const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
+        controller = new AbortController();
+
+        let assistantAccum = '';
+        let pendingChunk = '';
+        let scheduled = false;
+        let lastRenderTime = 0;
+        let currentStreamingModel = modelSelect.value || 'lmstudio';
+
+        const flush = () => {
+          // allow future scheduling
+          scheduled = false;
+          if (!pendingChunk) return;
+
+          assistantAccum += pendingChunk;
+          pendingChunk = '';
+
+          const now = Date.now();
+          // throttle updates to let MathJax breathe
+          if (now - lastRenderTime < 30) {
             if (!scheduled) {
               scheduled = true;
               requestAnimationFrame(flush);
             }
-          } catch {
-            continue; // keep-alives/comments
+            return;
           }
-        }
-        setStatus('online','Connected');
-      } catch (err) {
-        if (err.name === 'AbortError') {
-          pendingChunk += '\n\n[stopped]';
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
-          }
-          setStatus('online','Stopped');
-        } else {
-          const em = `\n\n[error] ${err.message}`;
-          pendingChunk += em;
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
-          }
-          setStatus('offline','Offline');
-        }
-      } finally {
+          lastRenderTime = now;
 
-        const endTime = Date.now();             // NEW: mark end time
-        const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
-        
-        // finalize assistant message in state using the same shadow swap
-        if (pendingChunk) {
-          // ensure last chunk makes it in
-          assistantAccum += pendingChunk;
-          pendingChunk = '';
-        }
+          if (!(liveFmtEl && liveFmtEl.checked)) {
+            assistantNode.textContent = assistantAccum;
+            scrollToBottomIfNeeded();
+            return;
+          }
 
-        // final render via double-buffer path
-        const shadow = ensureShadow();
-        shadow.innerHTML = renderMarkdown(assistantAccum);
+          // Double-buffered render: build off-screen, typeset there, then swap
+          const shadow = ensureShadow();
+
+          // If a typeset is running, queue and bail; we'll re-run flush after it completes
+          if (shadowBusy) {
+            shadowQueued = true;
+            return;
+          }
+          shadowBusy = true;
+
+          shadow.innerHTML = renderMarkdown(assistantAccum);
+
+
+          const doTypeset = async () => {
+            try {
+              await ensureMathJax();
+              await MathJax.typesetPromise([shadow]);
+            } catch (e) {
+              console.warn('MathJax typeset (shadow) failed:', e);
+            } finally {
+              // Atomic swap
+              assistantNode.innerHTML = shadow.innerHTML;
+              assistantNode.classList.add('markdown');
+              scrollToBottomIfNeeded();
+              shadowBusy = false;
+
+              if (shadowQueued) {
+                shadowQueued = false;
+                scheduled = true;
+                requestAnimationFrame(flush);
+              }
+            }
+          };
+          doTypeset();
+        };
+
+        const startTime = Date.now(); // NEW: mark start time
+        let completionTokens = 0; // NEW
         try {
-          await ensureMathJax();
-          await MathJax.typesetPromise([shadow]);
-        } catch (e) {
-          console.warn('Final MathJax typeset failed:', e);
+          const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
+          if (!res.ok || !res.body) {
+            const msg = `Request failed: HTTP ${res.status}`;
+            assistantNode.innerHTML = `<span class="error">${msg}</span>`;
+            throw new Error(msg);
+          }
+          for await (const raw of streamLines(res.body.getReader())) {
+            if (raw === '[DONE]') break;
+            try {
+              const obj = JSON.parse(raw);
+              if (obj.usage?.completion_tokens) { // NEW
+                completionTokens = obj.usage.completion_tokens;
+              }
+              const choice = obj.choices?.[0];
+              if (obj.model) {
+                updateModelBadge(obj.model);
+                currentStreamingModel = obj.model;
+              }
+              const delta = choice?.delta || choice; // support both chat.delta and plain text
+              const token = delta?.content || delta?.text || '';
+              if (!token) continue;
+              pendingChunk += token;
+              if (!scheduled) {
+                scheduled = true;
+                requestAnimationFrame(flush);
+              }
+            } catch {
+              continue; // keep-alives/comments
+            }
+          }
+          setStatus('online', 'Connected');
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            pendingChunk += '\n\n[stopped]';
+            if (!scheduled) {
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+            setStatus('online', 'Stopped');
+          } else {
+            const em = `\n\n[error] ${err.message}`;
+            pendingChunk += em;
+            if (!scheduled) {
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+            setStatus('offline', 'Offline');
+          }
+        } finally {
+
+          const endTime = Date.now();             // NEW: mark end time
+          const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
+
+          // finalize assistant message in state using the same shadow swap
+          if (pendingChunk) {
+            // ensure last chunk makes it in
+            assistantAccum += pendingChunk;
+            pendingChunk = '';
+          }
+
+          // final render via double-buffer path
+          const shadow = ensureShadow();
+          shadow.innerHTML = renderMarkdown(assistantAccum);
+          try {
+            await ensureMathJax();
+            await MathJax.typesetPromise([shadow]);
+          } catch (e) {
+            console.warn('Final MathJax typeset failed:', e);
+          }
+          // NEW: count tokens from accumulated text
+
+          function smartTokenEstimate(text) {
+            if (!text || text.trim().length === 0) return 0;
+
+            // Count different types of characters
+            const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+            const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
+            const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
+
+            // Count ASCII and other characters
+            const otherChars = text.length - chineseChars - japaneseChars - koreanChars;
+            const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
+
+            // Asian characters are typically 1 token each
+            const asianTokens = chineseChars + japaneseChars + koreanChars;
+
+            // Other characters use the old heuristic
+            const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
+
+            return asianTokens + otherTokens + specialChars;
+          }
+
+          const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
+
+
+          const tpsNum = (elapsedSec > 0 && tokenCount > 0)
+            ? (tokenCount / elapsedSec)
+            : NaN;
+
+          // display text (for the bubble)
+          const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
+
+          const statsLine = `<div style="font-size:12px;color:var(--muted)">
+  Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
+</div>`;
+
+          assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
+          assistantNode.classList.add('markdown');
+          addCopyButtons(assistantNode);
+
+          messages.push({
+            role: 'assistant',
+            content: assistantAccum,
+            model: currentStreamingModel,
+            stats: { tokens: tokenCount, timeSec: elapsedSec, tps: Number.isFinite(tpsNum) ? +tpsNum.toFixed(2) : null  }
+          });
+
+          running = false;
+          sendBtn.disabled = false; stopBtn.disabled = true;
+          controller = null;
+          saveSession();
         }
-        // NEW: count tokens from accumulated text
-
-        function smartTokenEstimate(text) {
-          if (!text || text.trim().length === 0) return 0;
-          
-          // Count different types of characters
-          const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-          const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
-          const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
-          
-          // Count ASCII and other characters
-          const otherChars = text.length - chineseChars - japaneseChars - koreanChars;
-          const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
-          
-          // Asian characters are typically 1 token each
-          const asianTokens = chineseChars + japaneseChars + koreanChars;
-          
-          // Other characters use the old heuristic
-          const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
-
-          return asianTokens + otherTokens + specialChars;
       }
-
-      const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
-      
-
-        const tps = elapsedSec > 0 ? (tokenCount / elapsedSec).toFixed(2) : '—';
-        const statsLine = `<div style="font-size:12px;color:var(--muted)">Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tps} tokens/sec</div>`;
-
-        assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
-        assistantNode.classList.add('markdown');
-        addCopyButtons(assistantNode);
-
-        messages.push({ 
-          role: 'assistant', 
-          content: assistantAccum + `\n\n[Stats] Tokens: ${tokenCount}, Time: ${elapsedSec.toFixed(2)}s, ${tps} tokens/sec`,
-          model: currentStreamingModel
-        });
-        
-        running = false;
-        sendBtn.disabled = false; stopBtn.disabled = true;
-        controller = null;
-        saveSession();
-      }
-    }
 
     // Handlers
     sendBtn.addEventListener('click', send);
