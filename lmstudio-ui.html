@@ -131,6 +131,29 @@ pre code {
     .composer .wrap { max-width: 900px; margin: 0 auto; padding: 12px 14px; display: grid; gap: 10px; }
     .composer textarea { width: 100%; min-height: 80px; max-height: 45vh; resize: vertical; padding: 12px; font-size: 15px;
       border-radius: var(--radius); background: var(--panel); border: 1px solid #2a2f3a; color: var(--fg); outline: none; }
+
+      /* Composer controls — match dark theme */
+.composer .actions input[type="text"],
+.composer .actions input[type="password"],
+.composer .actions input[type="number"],
+.composer .actions select {
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid #2a2f3a;
+  border-radius: 10px;
+  padding: 8px 10px;
+  outline: none;
+  min-width: 0;
+}
+.composer .actions input::placeholder { color: var(--muted); opacity: 1; }
+.composer .actions label { font-size: 12px; color: var(--muted); }
+.composer .actions input:focus,
+.composer .actions select:focus {
+  border-color: color-mix(in oklab, var(--accent), black 15%);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.composer .actions input[type="checkbox"] { accent-color: var(--accent); }
+
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
     .system { background: #0a3a2b20; border-color: #0a3a2b40; }
@@ -265,9 +288,9 @@ pre code {
 .menu-item:hover { background: #2a2f3a; }
 .menu-sep { height: 1px; background: #2a2f3a; margin: 6px 4px; }
 
-.composer .actions input[type="number"] { width: 9ch; }
+.composer .actions input[type="number"] { width: 13ch; }
 
-#temp { width: 7ch; }
+#temp { width: 8ch; }
 
 /* Optional: tighten labels on small screens */
 @media (max-width: 900px) {
@@ -663,8 +686,8 @@ pre code {
           bubble.insertAdjacentHTML(
             'beforeend',
             `<div class="stats-line" style="font-size:12px;color:var(--muted)">
-        Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps.toFixed(2)} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
-       </div>`
+          Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps.toFixed(2)} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
+         </div>`
           );
         }
 
@@ -748,14 +771,28 @@ pre code {
         models.forEach(m => {
           const opt = document.createElement('option');
           opt.value = m.id;
-          opt.textContent = m.id;
+          // Show model type if available (e.g., text-generation, embedding)
+          let type = '';
+          if (m.type) {
+            type = ` (${m.type})`;
+          } else if (m.embedding_only || m.id.toLowerCase().includes('embed')) {
+            type = ' (embedding)';
+          }
+          opt.textContent = m.id + type;
+          // Disable embedding-only models for chat
+          if (type.includes('(embedding)') || m.type === 'embedding' || m.embedding_only) {
+            opt.disabled = true;
+            //opt.textContent += ' [embedding only]';
+          }
           modelSelect.appendChild(opt);
         });
 
         if (keepCurrent && currentValue && models.some(m => m.id === currentValue)) {
           modelSelect.value = currentValue;
         } else if (!modelSelect.value && models.length > 0) {
-          modelSelect.value = models[0].id;
+          // Pick first non-embedding model if possible
+          const firstTextModel = models.find(m => m.type !== 'embedding' && !m.embedding_only);
+          modelSelect.value = firstTextModel ? firstTextModel.id : models[0].id;
         }
 
         updateModelBadge(modelSelect.value);
@@ -826,7 +863,7 @@ pre code {
 
       const push = (html) => (stash.push(html), STUB(stash.length - 1));
 
-     
+
 
       // --- fenced code first, then inline code (both stashed) ---
       s = s.replace(/```([\w+-]*)\n([\s\S]*?)```/g, (m, lang, code) => {
@@ -838,15 +875,18 @@ pre code {
         const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
         return push(`<code>${esc}</code>`);
       });
-      
-       // --- stash math ---
+
+      // --- stash math ---
       s = s.replace(/\$\$[\s\S]*?\$\$/g, m => push(m));
       s = s.replace(/\\\[[\s\S]*?\\\]/g, m => push(m));
       s = s.replace(/\\\([\s\S]*?\\\)/g, m => push(m));
 
       // $...$ inline math, but NOT $$, NOT `${`, not escaped `\$`, and no newlines
-      const inlineMath = /(^|[^$\\])\$(?!\$|\{)([^\n$]|\\\$)+?\$(?!\$)/g;
-      s = s.replace(inlineMath, (m, pre, body) => pre + push(`$${body}$`));
+      // $...$ inline math — not $$, not ${}, not escaped \$, no newlines
+      const inlineMath = /(?<![$\\])\$(?!\$|\{)((?:\\\.|[^\n$])+?)\$(?!\$)/g;
+
+      s = s.replace(inlineMath, (m, body) => push(`$${body}$`));
+
 
 
 
@@ -954,6 +994,16 @@ pre code {
       userNode.classList.add('markdown');
       inputEl.value = '';
       saveSession();
+      // Check if selected model is embedding-only
+      const selectedOption = modelSelect.selectedOptions[0];
+      if (selectedOption && selectedOption.disabled) {
+        assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
+        assistantNode.innerHTML = `<span class="error">Selected model is for embedding only and cannot be used for chat.</span>`;
+        running = false;
+        sendBtn.disabled = false; stopBtn.disabled = true;
+        setStatus('offline', 'Embedding model');
+        return;
+      }
 
       const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
 
@@ -1123,8 +1173,9 @@ pre code {
           const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
 
           // Count ASCII and other characters
-          const otherChars = text.length - chineseChars - japaneseChars - koreanChars;
+          
           const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
+          const otherChars = text.length - chineseChars - japaneseChars - koreanChars - specialChars;
 
           // Asian characters are typically 1 token each
           const asianTokens = chineseChars + japaneseChars + koreanChars;
@@ -1146,8 +1197,8 @@ pre code {
         const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
 
         const statsLine = `<div style="font-size:12px;color:var(--muted)">
-    Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
-  </div>`;
+      Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
+    </div>`;
 
         assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
         assistantNode.classList.add('markdown');
@@ -1178,7 +1229,28 @@ pre code {
     });
 
     exportBtn.addEventListener('click', exportMarkdown);
-    printBtn.addEventListener('click', () => window.print());
+    //printBtn.addEventListener('click', () => window.print());
+    printBtn.addEventListener('click', () => {
+      const original = document.title;
+      const safe = (titleEl.textContent || 'chat')      // use current msg title
+        .replace(/[\\/:*?"<>|]+/g, '')                  // strip illegal filename chars
+        .trim()
+        .slice(0, 120);                                 // keep it reasonable
+
+      document.title = safe;                            // browsers use this for PDF name
+      setStamp?.();                                     // optional: keep header in sync
+
+      const restore = () => {
+        document.title = original;
+        window.removeEventListener('afterprint', restore);
+        window.onafterprint = null;
+      };
+      window.addEventListener('afterprint', restore);
+      window.onafterprint = restore;                    // Safari/older support
+
+      window.print();
+    });
+
     newBtn.addEventListener('click', () => {
       if (running) return;
       if (!confirm('Start a new chat? Current transcript will be cleared.')) return;
