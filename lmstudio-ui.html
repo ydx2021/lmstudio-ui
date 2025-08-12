@@ -804,43 +804,53 @@
     let mathjaxLoading = false;
     let mathjaxPromise = null;
 
-  const fileInput = document.getElementById('file-input');
-  const attachmentsDiv = document.getElementById('attachments');
-  const pendingFiles = []; // { file, id }
+    const fileInput = document.getElementById('file-input');
+    const attachmentsDiv = document.getElementById('attachments');
+    const pendingFiles = []; // { file, id }
 
-  fileInput.addEventListener('change', () => {
-    for (const file of fileInput.files) addAttachment(file);
-    fileInput.value = ''; // allow picking the same file again later
-  });
+    fileInput.addEventListener('change', () => {
+      for (const file of fileInput.files) addAttachment(file);
+      fileInput.value = ''; // allow picking the same file again later
+    });
 
-  function addAttachment(file) {
-    const id = crypto.randomUUID();
-    pendingFiles.push({ file, id });
-    const chip = document.createElement('div');
-    chip.className = 'attach-chip';
-    chip.dataset.id = id;
-    chip.textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
-    const x = document.createElement('button');
-    x.textContent = '✕';
-    x.title = 'Remove';
-    x.onclick = () => {
-      const ix = pendingFiles.findIndex(p => p.id === id);
-      if (ix !== -1) pendingFiles.splice(ix, 1);
-      chip.remove();
-    };
-    chip.appendChild(x);
-    attachmentsDiv.appendChild(chip);
-  }
+    function addAttachment(file) {
+      const id = crypto.randomUUID();
+      pendingFiles.push({ file, id });
+      const chip = document.createElement('div');
+      chip.className = 'attach-chip';
+      chip.dataset.id = id;
+      chip.textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
+      const x = document.createElement('button');
+      x.textContent = '✕';
+      x.title = 'Remove';
+      x.onclick = () => {
+        const ix = pendingFiles.findIndex(p => p.id === id);
+        if (ix !== -1) pendingFiles.splice(ix, 1);
+        chip.remove();
+      };
+      chip.appendChild(x);
+      attachmentsDiv.appendChild(chip);
+    }
 
-  async function readTextAttachments(files) {
+    async function readTextAttachments(files) {
       const textParts = [];
+      const longestRun = (s, ch) => {
+        let best = 0, cur = 0;
+        for (const c of s) {
+          if (c === ch) { cur++; best = Math.max(best, cur); }
+          else cur = 0;
+        }
+        return best;
+      };
       for (const { file } of files) {
         if (/^text\/|application\/(json|xml|.*markdown)/i.test(file.type)) {
           const text = await file.text();
           // Guardrails: trim/limit to avoid blowing up context
-          const maxChars = 40_000; // tune to your context window
+          const maxChars = 400_000; // tune to your context window
           const body = text.length > maxChars ? text.slice(0, maxChars) + "\n…[truncated]" : text;
-          textParts.push(`\n\n[Attachment: ${file.name}]\n\`\`\`\n${body}\n\`\`\`\n`);
+          const maxTicks  = longestRun(body, '`');
+          const fence     = '`'.repeat(maxTicks + 1);
+          textParts.push(`\n\n[Attachment: ${file.name} (${body.length})]\n${fence}\n${body}\n${fence}\n`);
         }
       }
       return textParts.join('');
@@ -1127,8 +1137,8 @@
           bubble.insertAdjacentHTML(
             'beforeend',
             `<div class="stats-line" style="font-size:12px;color:var(--muted)">
-          Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps?tps.toFixed(2):''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
-         </div>`
+            Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps ? tps.toFixed(2) : ''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
+           </div>`
           );
         }
 
@@ -1304,13 +1314,13 @@
 
       const push = (html) => (stash.push(html), STUB(stash.length - 1));
 
+      const fenced = /(^|\n)(?<fence>```+|~~~+)[ \t]*([^\r\n]*)\r?\n([\s\S]*?)\n\k<fence>[ \t]*(?=\r?\n|$)/g;
 
-
-      // --- fenced code first, then inline code (both stashed) ---
-      s = s.replace(/```([\w+-]*)\n([\s\S]*?)```/g, (m, lang, code) => {
-        const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-        const cls = lang ? ` class="language-${lang}"` : '';
-        return push(`<pre><code${cls}>${esc.replace(/\n$/, '')}</code></pre>`);
+      s = s.replace(fenced, (m, lead, _fence, info, code, _off, _str, groups) => {
+        const lang = (info.match(/^\s*([A-Za-z0-9_.+-]+)/) || [])[1] || '';
+        const esc  = code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+        const cls  = lang ? ` class="language-${lang}"` : '';
+        return lead + push(`<pre><code${cls}>${esc.replace(/\n$/, '')}</code></pre>`);
       });
       s = s.replace(/`([^`]+)`/g, (m, code) => {
         const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -1416,7 +1426,7 @@
       let userText = inputEl.value.trim();
       if (!userText) return;
       const extra = await readTextAttachments(pendingFiles);
-      if (extra) 
+      if (extra)
         userText = userText + extra;
 
       pendingFiles.length = 0;
@@ -1632,7 +1642,7 @@
           const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
 
           // Count ASCII and other characters
-          
+
           const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
           const otherChars = text.length - chineseChars - japaneseChars - koreanChars - specialChars;
 
@@ -1656,8 +1666,8 @@
         const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
 
         const statsLine = `<div style="font-size:12px;color:var(--muted)">
-      Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
-    </div>`;
+        Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
+      </div>`;
 
         assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
         assistantNode.classList.add('markdown');
