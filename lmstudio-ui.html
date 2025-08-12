@@ -673,6 +673,11 @@
     #temp {
       width: 8ch;
     }
+    .attach-btn { cursor: pointer; user-select: none; }
+.attachments { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
+.attach-chip { display:inline-flex; align-items:center; gap:.4rem; padding:.2rem .5rem; border:1px solid #444; border-radius:999px; font-size:.85rem; }
+.attach-chip button { border:0; background:transparent; cursor:pointer; }
+
   
     /* Optional: tighten labels on small screens */
     @media (max-width: 900px) {
@@ -750,7 +755,13 @@
         <input id="apiKey" type="password" placeholder="API key (optional)" style="width: 14rem" />
         <label>Temp <input id="temp" type="number" step="0.1" min="0" max="2" value="0.7"></label>
         <label>MaxTokens <input id="maxT" type="number" step="1" min="1" value="100000"></label>
-        <label title="Live-format Markdown while streaming"><input type="checkbox" id="liveFmt" checked> Live format</label>
+        <label title="Live-format Markdown while streaming"><input type="checkbox" id="liveFmt" checked> Live
+          format</label>
+        <label class="attach-btn">
+          <input id="file-input" type="file" multiple hidden>
+          📎 Attach
+        </label>
+        <div id="attachments" class="attachments"></div>
         <div class="actions-inline" style="display:flex; gap:8px; align-items:center;">
           <button class="btn primary" id="sendBtn">Send</button>
           <button class="btn" id="stopBtn" disabled>Stop</button>
@@ -792,6 +803,50 @@
     let chatHistory = [];
     let mathjaxLoading = false;
     let mathjaxPromise = null;
+
+  const fileInput = document.getElementById('file-input');
+  const attachmentsDiv = document.getElementById('attachments');
+  const pendingFiles = []; // { file, id }
+
+  fileInput.addEventListener('change', () => {
+    for (const file of fileInput.files) addAttachment(file);
+    fileInput.value = ''; // allow picking the same file again later
+  });
+
+  function addAttachment(file) {
+    const id = crypto.randomUUID();
+    pendingFiles.push({ file, id });
+    const chip = document.createElement('div');
+    chip.className = 'attach-chip';
+    chip.dataset.id = id;
+    chip.textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
+    const x = document.createElement('button');
+    x.textContent = '✕';
+    x.title = 'Remove';
+    x.onclick = () => {
+      const ix = pendingFiles.findIndex(p => p.id === id);
+      if (ix !== -1) pendingFiles.splice(ix, 1);
+      chip.remove();
+    };
+    chip.appendChild(x);
+    attachmentsDiv.appendChild(chip);
+  }
+
+  async function readTextAttachments(files) {
+      const textParts = [];
+      for (const { file } of files) {
+        if (/^text\/|application\/(json|xml|.*markdown)/i.test(file.type)) {
+          const text = await file.text();
+          // Guardrails: trim/limit to avoid blowing up context
+          const maxChars = 40_000; // tune to your context window
+          const body = text.length > maxChars ? text.slice(0, maxChars) + "\n…[truncated]" : text;
+          textParts.push(`\n\n[Attachment: ${file.name}]\n\`\`\`\n${body}\n\`\`\`\n`);
+        }
+      }
+      return textParts.join('');
+    }
+
+
 
     // --- Shadow buffer for double-buffered MathJax rendering ---
     let shadowBuf = null, shadowBusy = false, shadowQueued = false;
@@ -1072,7 +1127,7 @@
           bubble.insertAdjacentHTML(
             'beforeend',
             `<div class="stats-line" style="font-size:12px;color:var(--muted)">
-          Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps.toFixed(2)} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
+          Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps?tps.toFixed(2):''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
          </div>`
           );
         }
@@ -1227,7 +1282,7 @@
         btn.className = 'copy-btn';
         btn.textContent = 'Copy';
         btn.addEventListener('click', () => {
-          const code = pre.innerText; // preserves visible formatting
+          const code = pre.querySelector('code').textContent; // preserves visible formatting
           navigator.clipboard.writeText(code).then(() => {
             btn.textContent = 'Copied!';
             setTimeout(() => btn.textContent = 'Copy', 1500);
@@ -1358,8 +1413,14 @@
     // Send message
     async function send() {
       if (running) return;
-      const userText = inputEl.value.trim();
+      let userText = inputEl.value.trim();
       if (!userText) return;
+      const extra = await readTextAttachments(pendingFiles);
+      if (extra) 
+        userText = userText + extra;
+
+      pendingFiles.length = 0;
+      attachmentsDiv.innerHTML = '';
 
       setStamp();
       running = true;
@@ -1481,14 +1542,26 @@
       try {
         const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
         if (!res.ok || !res.body) {
-          const msg = `Request failed: HTTP ${res.status}`;
-          assistantNode.innerHTML = `<span class="error">${msg}</span>`;
+          let msg = `HTTP ${res.status}`;
+          try {
+            const text = await res.text();
+            const j = JSON.parse(text);
+            if (j?.error?.message) msg += ` — ${j.error.message}`;
+            else if (text) msg += ` — ${text}`;
+          } catch { /* ignore parse failure */ }
+          assistantNode.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
           throw new Error(msg);
         }
         for await (const raw of streamLines(res.body.getReader())) {
           if (raw === '[DONE]') break;
           try {
             const obj = JSON.parse(raw);
+            if (obj.error) {
+              const msg = obj.error.message || JSON.stringify(obj.error);
+              pendingChunk += `\n\n[ERROR] ${msg}`;
+              if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
+              continue;
+            }
             if (obj.usage?.completion_tokens) { // NEW
               completionTokens = obj.usage.completion_tokens;
             }
