@@ -673,11 +673,35 @@
     #temp {
       width: 8ch;
     }
-    .attach-btn { cursor: pointer; user-select: none; }
-.attachments { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
-.attach-chip { display:inline-flex; align-items:center; gap:.4rem; padding:.2rem .5rem; border:1px solid #444; border-radius:999px; font-size:.85rem; }
-.attach-chip button { border:0; background:transparent; cursor:pointer; }
-
+  
+    .attach-btn {
+      cursor: pointer;
+      user-select: none;
+    }
+  
+    .attachments {
+      display: flex;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-top: .5rem;
+    }
+  
+    .attach-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .2rem .5rem;
+      border: 1px solid #444;
+      border-radius: 999px;
+      font-size: .85rem;
+    }
+  
+    .attach-chip button {
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+  
   
     /* Optional: tighten labels on small screens */
     @media (max-width: 900px) {
@@ -706,29 +730,29 @@
         <button class="btn ghost" id="refreshModels" title="Refresh models">↻</button>
       </div>
       <div class="right">
-  <span class="status" id="status">
-    <span class="dot offline"></span>
-    <span class="statustext">Offline</span>
-  </span>
-  <span class="badge" id="modelBadge" title="Current model" style="display:none">model: —</span>
-
-  <!-- Kebab menu -->
-  <div class="menu" id="kebabMenu">
-    <button class="btn ghost menu-btn" id="menuBtn" title="More actions">⋮</button>
-    <div class="menu-list" role="menu" aria-labelledby="menuBtn">
-      <!-- Keep IDs so your existing JS keeps working -->
-     
-      <button class="menu-item" id="printBtn" role="menuitem">🖨 Print</button>
-      <button class="menu-item" id="exportBtn" role="menuitem">⬇︎ Export</button>
-       <div class="menu-sep" aria-hidden="true"></div>
-       <button class="menu-item" id="historyBtn" role="menuitem">📜 History</button>
-    </div>
-  </div>
-
-  <!-- Keep New visible since it’s high-frequency -->
-  <button class="btn" id="newBtn" title="Start a new chat">＋ New</button>
-</div>
-
+        <span class="status" id="status">
+          <span class="dot offline"></span>
+          <span class="statustext">Offline</span>
+        </span>
+        <span class="badge" id="modelBadge" title="Current model" style="display:none">model: —</span>
+    
+        <!-- Kebab menu -->
+        <div class="menu" id="kebabMenu">
+          <button class="btn ghost menu-btn" id="menuBtn" title="More actions">⋮</button>
+          <div class="menu-list" role="menu" aria-labelledby="menuBtn">
+            <!-- Keep IDs so your existing JS keeps working -->
+    
+            <button class="menu-item" id="printBtn" role="menuitem">🖨 Print</button>
+            <button class="menu-item" id="exportBtn" role="menuitem">⬇︎ Export</button>
+            <div class="menu-sep" aria-hidden="true"></div>
+            <button class="menu-item" id="historyBtn" role="menuitem">📜 History</button>
+          </div>
+        </div>
+    
+        <!-- Keep New visible since it’s high-frequency -->
+        <button class="btn" id="newBtn" title="Start a new chat">＋ New</button>
+      </div>
+    
     </div>
   </header>
 
@@ -848,8 +872,10 @@
           // Guardrails: trim/limit to avoid blowing up context
           const maxChars = 400_000; // tune to your context window
           const body = text.length > maxChars ? text.slice(0, maxChars) + "\n…[truncated]" : text;
-          const maxTicks  = longestRun(body, '`');
-          const fence     = '`'.repeat(maxTicks + 1);
+          let maxTicks  = longestRun(body, '`')+1;
+          if (maxTicks <3) 
+            maxTicks =3;
+          const fence     = '`'.repeat(maxTicks);
           textParts.push(`\n\n[Attachment: ${file.name} (${body.length})]\n${fence}\n${body}\n${fence}\n`);
         }
       }
