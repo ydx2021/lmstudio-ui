@@ -209,6 +209,30 @@
     }
   
   
+    .copy-btn:hover::after {
+      content: "Copy to clipboard";
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-120px) translateY(20px);
+      background-color: #333;
+      color: rgb(241, 231, 231);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 1;
+      pointer-events: none;
+      z-index: 1000;
+    }
+  
+    .copy-btn:hover::after {
+      opacity: 1;
+      visibility: visible;
+    }
+  
+  
+  
     pre code {
       display: block;
       /* ensures full width */
@@ -702,6 +726,20 @@
       cursor: pointer;
     }
   
+    /* Slow blink to indicate waiting for server response */
+@keyframes model-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+.model-tag.blink-slow,
+#modelBadge.blink-slow {
+  animation: model-blink 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .model-tag.blink-slow,
+  #modelBadge.blink-slow { animation: none; }
+}
+
   
     /* Optional: tighten labels on small screens */
     @media (max-width: 900px) {
@@ -779,8 +817,7 @@
         <input id="apiKey" type="password" placeholder="API key (optional)" style="width: 14rem" />
         <label>Temp <input id="temp" type="number" step="0.1" min="0" max="2" value="0.7"></label>
         <label>MaxTokens <input id="maxT" type="number" step="1" min="1" value="100000"></label>
-        <label title="Live-format Markdown while streaming"><input type="checkbox" id="liveFmt" checked> Live
-          format</label>
+        <label title="Live-format Markdown while streaming"><input type="checkbox" id="liveFmt" checked>Format</label>
         <label class="attach-btn">
           <input id="file-input" type="file" multiple hidden>
           📎 Attach
@@ -868,14 +905,13 @@
       };
       for (const { file } of files) {
         if (/^text\/|application\/(json|xml|.*markdown)/i.test(file.type)) {
-          const text = await file.text();
-          // Guardrails: trim/limit to avoid blowing up context
+          // Guardrails: read only the first maxChars to avoid loading the entire file
           const maxChars = 400_000; // tune to your context window
-          const body = text.length > maxChars ? text.slice(0, maxChars) + "\n…[truncated]" : text;
-          let maxTicks  = longestRun(body, '`')+1;
-          if (maxTicks <3) 
-            maxTicks =3;
-          const fence     = '`'.repeat(maxTicks);
+          const head = await file.slice(0, maxChars).text();
+          const truncated = file.size > maxChars;
+          const body = truncated ? head + "\n…[truncated]" : head;
+          const maxTicks = Math.max(3, longestRun(body, '`') + 1);
+          const fence = '`'.repeat(maxTicks);
           textParts.push(`\n\n[Attachment: ${file.name} (${body.length})]\n${fence}\n${body}\n${fence}\n`);
         }
       }
@@ -1163,8 +1199,8 @@
           bubble.insertAdjacentHTML(
             'beforeend',
             `<div class="stats-line" style="font-size:12px;color:var(--muted)">
-            Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps ? tps.toFixed(2) : ''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
-           </div>`
+              Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps ? tps.toFixed(2) : ''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
+             </div>`
           );
         }
 
@@ -1316,16 +1352,16 @@
 
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
-        btn.textContent = 'Copy';
+        btn.textContent = '📋';
         btn.addEventListener('click', () => {
           const code = pre.querySelector('code').textContent; // preserves visible formatting
           navigator.clipboard.writeText(code).then(() => {
             btn.textContent = 'Copied!';
-            setTimeout(() => btn.textContent = 'Copy', 1500);
+            setTimeout(() => btn.textContent = '📋', 1500);
           }).catch(err => {
             console.error('Copy failed', err);
             btn.textContent = 'Error';
-            setTimeout(() => btn.textContent = 'Copy', 1500);
+            setTimeout(() => btn.textContent = '📋', 1500);
           });
         });
 
@@ -1344,8 +1380,8 @@
 
       s = s.replace(fenced, (m, lead, _fence, info, code, _off, _str, groups) => {
         const lang = (info.match(/^\s*([A-Za-z0-9_.+-]+)/) || [])[1] || '';
-        const esc  = code.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-        const cls  = lang ? ` class="language-${lang}"` : '';
+        const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        const cls = lang ? ` class="language-${lang}"` : '';
         return lead + push(`<pre><code${cls}>${esc.replace(/\n$/, '')}</code></pre>`);
       });
       s = s.replace(/`([^`]+)`/g, (m, code) => {
@@ -1396,33 +1432,65 @@
 
 
 
+    let mathjaxLoad = null; // shared single-flight promise
 
     function ensureMathJax() {
-      if (window.MathJax) return Promise.resolve();
-      if (mathjaxPromise) return mathjaxPromise;
+      // Already fully initialized?
+      if (window.MathJax?.startup?.promise) return window.MathJax.startup.promise;
 
-      // Configure BEFORE loading the script
+      // A load is already in-flight (or completed): reuse it.
+      if (mathjaxLoad) return mathjaxLoad;
+
+      // Configure before loading; merge with any preexisting config.
       window.MathJax = {
+        ...window.MathJax,
         tex: {
           inlineMath: [['$', '$'], ['\\(', '\\)']],
           displayMath: [['$$', '$$'], ['\\[', '\\]']],
-          processEscapes: true
+          processEscapes: true,
+          ...(window.MathJax?.tex || {})
         },
         options: {
-          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-        }
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ...(window.MathJax?.options || {})
+        },
+        startup: { typeset: false, ...(window.MathJax?.startup || {}) }
       };
 
-      mathjaxLoading = true;
-      mathjaxPromise = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
-        script.onload = () => { mathjaxLoading = false; resolve(); };
-        script.onerror = () => { mathjaxLoading = false; mathjaxPromise = null; reject(new Error('Failed to load MathJax')); };
-        document.head.appendChild(script);
+      mathjaxLoad = new Promise((resolve, reject) => {
+        const finish = () => {
+          const ready = window.MathJax?.startup?.promise || Promise.resolve();
+          ready.then(resolve, (e) => { mathjaxLoad = null; reject(e); });
+        };
+        const fail = () => { mathjaxLoad = null; reject(new Error('Failed to load MathJax')); };
+
+        let s = document.getElementById('mathjax-script');
+        if (s) {
+          // If script exists, hook its events or finish if already ready.
+          if (window.MathJax?.startup?.promise) finish();
+          else {
+            s.addEventListener('load', finish, { once: true });
+            s.addEventListener('error', fail, { once: true });
+          }
+          return;
+        }
+
+        s = document.createElement('script');
+        s.id = 'mathjax-script';
+        s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+        s.async = true;
+        s.addEventListener('load', finish, { once: true });
+        s.addEventListener('error', fail, { once: true });
+        document.head.appendChild(s);
       });
-      return mathjaxPromise;
+
+      return mathjaxLoad;
     }
+
+    // Example:
+    // await ensureMathJax();
+    // await MathJax.typesetPromise([document.body]); // or a specific container
+
 
     // Stream reader for OpenAI-compatible responses (SSE-like lines)
     async function* streamLines(reader) {
@@ -1448,270 +1516,289 @@
 
     // Send message
     async function send() {
-      if (running) return;
-      let userText = inputEl.value.trim();
-      if (!userText) return;
-      const extra = await readTextAttachments(pendingFiles);
-      if (extra)
-        userText = userText + extra;
+        if (running) return;
+        let userText = inputEl.value.trim();
+        if (!userText) return;
+        const extra = await readTextAttachments(pendingFiles);
+        if (extra)
+          userText = userText + extra;
 
-      pendingFiles.length = 0;
-      attachmentsDiv.innerHTML = '';
+        pendingFiles.length = 0;
+        attachmentsDiv.innerHTML = '';
+        let pendingModelTagEl = null;
 
-      setStamp();
-      running = true;
-      sendBtn.disabled = true; stopBtn.disabled = false;
-      setStatus('busy', 'Querying');
-      updateModelBadge(modelSelect.value || 'lmstudio');
 
-      if (messages.length === 0 && sysEl.value.trim()) {
-        messages.push({ role: 'system', content: sysEl.value.trim() });
-        const sysNode = addMessage('system', sysEl.value.trim());
-        sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
-        sysNode.classList.add('markdown');
-      }
+        setStamp();
+        running = true;
+        sendBtn.disabled = true; stopBtn.disabled = false;
+        setStatus('busy', 'Querying');
+        updateModelBadge(modelSelect.value || 'lmstudio');
 
-      messages.push({ role: 'user', content: userText });
-      const userNode = addMessage('user', userText);
-      userNode.innerHTML = renderMarkdown(userText);
-      userNode.classList.add('markdown');
-      inputEl.value = '';
-      saveSession();
-      // Check if selected model is embedding-only
-      const selectedOption = modelSelect.selectedOptions[0];
-      if (selectedOption && selectedOption.disabled) {
-        assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
-        assistantNode.innerHTML = `<span class="error">Selected model is for embedding only and cannot be used for chat.</span>`;
-        running = false;
-        sendBtn.disabled = false; stopBtn.disabled = true;
-        setStatus('offline', 'Embedding model');
-        return;
-      }
-
-      const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
-
-      // prepare request
-      const payload = {
-        model: modelSelect.value || 'lmstudio',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        stream: true,
-        temperature: Number(tempEl.value || 0.7),
-        max_tokens: Number(maxTEl.value || 100000)
-      };
-
-      const headers = { 'Content-Type': 'application/json' };
-      const key = apiKeyEl.value.trim();
-      if (key) headers['Authorization'] = 'Bearer ' + key;
-
-      const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
-      controller = new AbortController();
-
-      let assistantAccum = '';
-      let pendingChunk = '';
-      let scheduled = false;
-      let lastRenderTime = 0;
-      let currentStreamingModel = modelSelect.value || 'lmstudio';
-
-      const flush = () => {
-        // allow future scheduling
-        scheduled = false;
-        if (!pendingChunk) return;
-
-        assistantAccum += pendingChunk;
-        pendingChunk = '';
-
-        const now = Date.now();
-        // throttle updates to let MathJax breathe
-        if (now - lastRenderTime < 30) {
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
-          }
-          return;
+        if (messages.length === 0 && sysEl.value.trim()) {
+          messages.push({ role: 'system', content: sysEl.value.trim() });
+          const sysNode = addMessage('system', sysEl.value.trim());
+          sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
+          sysNode.classList.add('markdown');
         }
-        lastRenderTime = now;
 
-        if (!(liveFmtEl && liveFmtEl.checked)) {
-          assistantNode.textContent = assistantAccum;
-          scrollToBottomIfNeeded();
+        messages.push({ role: 'user', content: userText });
+        const userNode = addMessage('user', userText);
+        userNode.innerHTML = renderMarkdown(userText);
+        userNode.classList.add('markdown');
+        inputEl.value = '';
+        saveSession();
+        // Check if selected model is embedding-only
+        const selectedOption = modelSelect.selectedOptions[0];
+        if (selectedOption && selectedOption.disabled) {
+          assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
+          assistantNode.innerHTML = `<span class="error">Selected model is for embedding only and cannot be used for chat.</span>`;
+          running = false;
+          sendBtn.disabled = false; stopBtn.disabled = true;
+          setStatus('offline', 'Embedding model');
           return;
         }
 
-        // Double-buffered render: build off-screen, typeset there, then swap
-        const shadow = ensureShadow();
+        const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
+        // Grab the newly added assistant message wrapper and its model tag
+        const assistantWrap = threadEl.lastElementChild;
+        pendingModelTagEl = assistantWrap?.querySelector('.model-tag') || null;
 
-        // If a typeset is running, queue and bail; we'll re-run flush after it completes
-        if (shadowBusy) {
-          shadowQueued = true;
-          return;
+        // Start blinking: message tag + header badge (and show the badge while waiting)
+        if (pendingModelTagEl) pendingModelTagEl.classList.add('blink-slow');
+        if (false && modelBadge) {
+          modelBadge.style.display = 'inline-block';
+          modelBadge.classList.add('blink-slow');
         }
-        shadowBusy = true;
 
-        shadow.innerHTML = renderMarkdown(assistantAccum);
-
-
-        const doTypeset = async () => {
-          try {
-            await ensureMathJax();
-            await MathJax.typesetPromise([shadow]);
-          } catch (e) {
-            console.warn('MathJax typeset (shadow) failed:', e);
-          } finally {
-            // Atomic swap
-            assistantNode.innerHTML = shadow.innerHTML;
-            assistantNode.classList.add('markdown');
-            scrollToBottomIfNeeded();
-            shadowBusy = false;
-
-            if (shadowQueued) {
-              shadowQueued = false;
-              scheduled = true;
-              requestAnimationFrame(flush);
-            }
-          }
+        // prepare request
+        const payload = {
+          model: modelSelect.value || 'lmstudio',
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          stream: true,
+          temperature: Number(tempEl.value || 0.7),
+          max_tokens: Number(maxTEl.value || 100000)
         };
-        doTypeset();
-      };
 
-      const startTime = Date.now(); // NEW: mark start time
-      let completionTokens = 0; // NEW
-      try {
-        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
-        if (!res.ok || !res.body) {
-          let msg = `HTTP ${res.status}`;
-          try {
-            const text = await res.text();
-            const j = JSON.parse(text);
-            if (j?.error?.message) msg += ` — ${j.error.message}`;
-            else if (text) msg += ` — ${text}`;
-          } catch { /* ignore parse failure */ }
-          assistantNode.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
-          throw new Error(msg);
-        }
-        for await (const raw of streamLines(res.body.getReader())) {
-          if (raw === '[DONE]') break;
-          try {
-            const obj = JSON.parse(raw);
-            if (obj.error) {
-              const msg = obj.error.message || JSON.stringify(obj.error);
-              pendingChunk += `\n\n[ERROR] ${msg}`;
-              if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
-              continue;
-            }
-            if (obj.usage?.completion_tokens) { // NEW
-              completionTokens = obj.usage.completion_tokens;
-            }
-            const choice = obj.choices?.[0];
-            if (obj.model) {
-              updateModelBadge(obj.model);
-              currentStreamingModel = obj.model;
-            }
-            const delta = choice?.delta || choice; // support both chat.delta and plain text
-            const token = delta?.content || delta?.text || '';
-            if (!token) continue;
-            pendingChunk += token;
+        const headers = { 'Content-Type': 'application/json' };
+        const key = apiKeyEl.value.trim();
+        if (key) headers['Authorization'] = 'Bearer ' + key;
+
+        const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
+        controller = new AbortController();
+
+        let assistantAccum = '';
+        let pendingChunk = '';
+        let scheduled = false;
+        let lastRenderTime = 0;
+        let currentStreamingModel = modelSelect.value || 'lmstudio';
+
+        const flush = () => {
+          // allow future scheduling
+          scheduled = false;
+          if (!pendingChunk) return;
+
+          assistantAccum += pendingChunk;
+          pendingChunk = '';
+
+          const now = Date.now();
+          // throttle updates to let MathJax breathe
+          if (now - lastRenderTime < 30) {
             if (!scheduled) {
               scheduled = true;
               requestAnimationFrame(flush);
             }
-          } catch {
-            continue; // keep-alives/comments
+            return;
           }
-        }
-        setStatus('online', 'Connected');
-      } catch (err) {
-        if (err.name === 'AbortError') {
-          pendingChunk += '\n\n[stopped]';
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
+          lastRenderTime = now;
+
+          if (!(liveFmtEl && liveFmtEl.checked)) {
+            assistantNode.textContent = assistantAccum;
+            scrollToBottomIfNeeded();
+            return;
           }
-          setStatus('online', 'Stopped');
-        } else {
-          const em = `\n\n[error] ${err.message}`;
-          pendingChunk += em;
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
+
+          // Double-buffered render: build off-screen, typeset there, then swap
+          const shadow = ensureShadow();
+
+          // If a typeset is running, queue and bail; we'll re-run flush after it completes
+          if (shadowBusy) {
+            shadowQueued = true;
+            return;
           }
-          setStatus('offline', 'Offline');
-        }
-      } finally {
+          shadowBusy = true;
 
-        const endTime = Date.now();             // NEW: mark end time
-        const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
+          shadow.innerHTML = renderMarkdown(assistantAccum);
 
-        // finalize assistant message in state using the same shadow swap
-        if (pendingChunk) {
-          // ensure last chunk makes it in
-          assistantAccum += pendingChunk;
-          pendingChunk = '';
-        }
 
-        // final render via double-buffer path
-        const shadow = ensureShadow();
-        shadow.innerHTML = renderMarkdown(assistantAccum);
+          const doTypeset = async () => {
+            try {
+              await ensureMathJax();
+              await MathJax.typesetPromise([shadow]);
+            } catch (e) {
+              console.warn('MathJax typeset (shadow) failed:', e);
+            } finally {
+              // Atomic swap
+              assistantNode.innerHTML = shadow.innerHTML;
+              assistantNode.classList.add('markdown');
+              scrollToBottomIfNeeded();
+              shadowBusy = false;
+
+              if (shadowQueued) {
+                shadowQueued = false;
+                scheduled = true;
+                requestAnimationFrame(flush);
+              }
+            }
+          };
+          doTypeset();
+        };
+
+        const startTime = Date.now(); // NEW: mark start time
+        let completionTokens = 0; // NEW
         try {
-          await ensureMathJax();
-          await MathJax.typesetPromise([shadow]);
-        } catch (e) {
-          console.warn('Final MathJax typeset failed:', e);
+          const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
+          if (!res.ok || !res.body) {
+            let msg = `HTTP ${res.status}`;
+            try {
+              const text = await res.text();
+              const j = JSON.parse(text);
+              if (j?.error?.message) msg += ` — ${j.error.message}`;
+              else if (text) msg += ` — ${text}`;
+            } catch { /* ignore parse failure */ }
+            assistantNode.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
+            throw new Error(msg);
+          }
+          for await (const raw of streamLines(res.body.getReader())) {
+            if (raw === '[DONE]') break;
+            try {
+              const obj = JSON.parse(raw);
+              if (obj.error) {
+                const msg = obj.error.message || JSON.stringify(obj.error);
+                pendingChunk += `\n\n[ERROR] ${msg}`;
+                if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
+                continue;
+              }
+              if (obj.usage?.completion_tokens) { // NEW
+                completionTokens = obj.usage.completion_tokens;
+              }
+              const choice = obj.choices?.[0];
+              if (obj.model) {
+                updateModelBadge(obj.model);
+                currentStreamingModel = obj.model;
+              }
+              const delta = choice?.delta || choice; // support both chat.delta and plain text
+              const token = delta?.content || delta?.text || '';
+              if (!token) continue;
+              pendingChunk += token;
+              if (!scheduled) {
+                scheduled = true;
+                requestAnimationFrame(flush);
+              }
+            } catch {
+              continue; // keep-alives/comments
+            }
+          }
+          setStatus('online', 'Connected');
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            pendingChunk += '\n\n[stopped]';
+            if (!scheduled) {
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+            setStatus('online', 'Stopped');
+          } else {
+            const em = `\n\n[error] ${err.message}`;
+            pendingChunk += em;
+            if (!scheduled) {
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+            setStatus('offline', 'Offline');
+          }
+        } finally {
+
+          const endTime = Date.now();             // NEW: mark end time
+          const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
+
+          // finalize assistant message in state using the same shadow swap
+          if (pendingChunk) {
+            // ensure last chunk makes it in
+            assistantAccum += pendingChunk;
+            pendingChunk = '';
+          }
+
+          // final render via double-buffer path
+          const shadow = ensureShadow();
+          shadow.innerHTML = renderMarkdown(assistantAccum);
+          try {
+            await ensureMathJax();
+            await MathJax.typesetPromise([shadow]);
+          } catch (e) {
+            console.warn('Final MathJax typeset failed:', e);
+          }
+          // NEW: count tokens from accumulated text
+
+          function smartTokenEstimate(text) {
+            if (!text || text.trim().length === 0) return 0;
+
+            // Count different types of characters
+            const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+            const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
+            const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
+
+            // Count ASCII and other characters
+
+            const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
+            const otherChars = text.length - chineseChars - japaneseChars - koreanChars - specialChars;
+
+            // Asian characters are typically 1 token each
+            const asianTokens = chineseChars + japaneseChars + koreanChars;
+
+            // Other characters use the old heuristic
+            const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
+
+            return asianTokens + otherTokens + specialChars;
+          }
+
+          const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
+
+
+          const tpsNum = (elapsedSec > 0 && tokenCount > 0)
+            ? (tokenCount / elapsedSec)
+            : NaN;
+
+          // display text (for the bubble)
+          const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
+
+          const statsLine = `<div style="font-size:12px;color:var(--muted)">
+          Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
+        </div>`;
+
+          assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
+          assistantNode.classList.add('markdown');
+          addCopyButtons(assistantNode);
+
+          messages.push({
+            role: 'assistant',
+            content: assistantAccum,
+            model: currentStreamingModel,
+            stats: { tokens: tokenCount, timeSec: elapsedSec, tps: Number.isFinite(tpsNum) ? +tpsNum.toFixed(2) : null, endTime: endTime }
+          });
+
+          running = false;
+          sendBtn.disabled = false; stopBtn.disabled = true;
+          // Stop blinking and (optionally) hide the badge again
+          if (pendingModelTagEl) pendingModelTagEl.classList.remove('blink-slow');
+          if (modelBadge) {
+            modelBadge.classList.remove('blink-slow');
+            modelBadge.style.display = 'none'; // keep header clean when idle
+          }
+
+          controller = null;
+          saveSession();
         }
-        // NEW: count tokens from accumulated text
-
-        function smartTokenEstimate(text) {
-          if (!text || text.trim().length === 0) return 0;
-
-          // Count different types of characters
-          const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-          const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
-          const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
-
-          // Count ASCII and other characters
-
-          const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
-          const otherChars = text.length - chineseChars - japaneseChars - koreanChars - specialChars;
-
-          // Asian characters are typically 1 token each
-          const asianTokens = chineseChars + japaneseChars + koreanChars;
-
-          // Other characters use the old heuristic
-          const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
-
-          return asianTokens + otherTokens + specialChars;
-        }
-
-        const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
-
-
-        const tpsNum = (elapsedSec > 0 && tokenCount > 0)
-          ? (tokenCount / elapsedSec)
-          : NaN;
-
-        // display text (for the bubble)
-        const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
-
-        const statsLine = `<div style="font-size:12px;color:var(--muted)">
-        Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
-      </div>`;
-
-        assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
-        assistantNode.classList.add('markdown');
-        addCopyButtons(assistantNode);
-
-        messages.push({
-          role: 'assistant',
-          content: assistantAccum,
-          model: currentStreamingModel,
-          stats: { tokens: tokenCount, timeSec: elapsedSec, tps: Number.isFinite(tpsNum) ? +tpsNum.toFixed(2) : null, endTime: endTime }
-        });
-
-        running = false;
-        sendBtn.disabled = false; stopBtn.disabled = true;
-        controller = null;
-        saveSession();
       }
-    }
 
     // Handlers
     sendBtn.addEventListener('click', send);
