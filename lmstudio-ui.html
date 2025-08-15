@@ -726,20 +726,195 @@
       cursor: pointer;
     }
   
+    /* Subtle hairline 
+    .md-hr {
+      border: 0;
+      border-top: 1px solid currentColor;
+      opacity: .2;
+      margin: .6rem 0 .8rem;
+    }
+    
+    .md-hr { border-top: 1px dotted currentColor; opacity: .35; }
+    */
+  
+    /* Or: spacer only (no visible line) */
+    .md-hr {
+      border: 0;
+      height: 0;
+      margin: .8rem 0;
+    }
+  
+    /* Light/Dark defaults (override as needed) */
+    :root {
+      --md-table-bg: #fff;
+      --md-table-text: #222;
+      --md-table-border: #d0d7de;
+      --md-table-head-bg: #f6f8fa;
+      --md-table-row-alt: #fbfdff;
+      --md-table-row-hover: #eef6ff;
+    }
+  
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --md-table-bg: #0f1116;
+        --md-table-text: #e6edf3;
+        --md-table-border: #30363d;
+        --md-table-head-bg: #161b22;
+        --md-table-row-alt: #0d131a;
+        --md-table-row-hover: #1b2230;
+      }
+    }
+  
+    /* Optional wrapper if you can add it: <div class="md-table-wrap"><table class="md-table">… */
+    .md-table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+  
+    /* Table */
+    .md-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid var(--md-table-border);
+      border-radius: 8px;
+      background: var(--md-table-bg);
+      color: var(--md-table-text);
+      /* If you can't add the wrapper, uncomment next two lines for self-scrolling
+      display:block;
+      overflow-x:auto;
+      */
+    }
+  
+    /* Header */
+    .md-table thead th {
+      background: var(--md-table-head-bg);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      /* sticks if inside a scrolling parent */
+    }
+  
+    /* Cells */
+    .md-table th,
+    .md-table td {
+      padding: 8px 12px;
+      border-right: 1px solid var(--md-table-border);
+      border-bottom: 1px solid var(--md-table-border);
+      vertical-align: top;
+      text-align: left;
+      /* your inline styles for text-align will override */
+    }
+  
+    .md-table th:last-child,
+    .md-table td:last-child {
+      border-right: 0;
+    }
+  
+    .md-table tr:last-child td {
+      border-bottom: 0;
+    }
+  
+    /* Zebra + hover */
+    .md-table tbody tr:nth-child(even) {
+      background: var(--md-table-row-alt);
+    }
+  
+    .md-table tbody tr:hover {
+      background: var(--md-table-row-hover);
+    }
+  
+    /* Caption */
+    .md-table caption {
+      caption-side: bottom;
+      font-size: .9em;
+      color: rgba(0, 0, 0, .6);
+      padding: .5rem 0;
+    }
+  
+    @media (prefers-color-scheme: dark) {
+      .md-table caption {
+        color: rgba(255, 255, 255, .6);
+      }
+    }
+  
+    /* Code inside cells */
+    .md-table code {
+      background: rgba(127, 127, 127, .15);
+      padding: .1em .3em;
+      border-radius: 4px;
+    }
+  
+    .md-table pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-width: min(100%, 60ch);
+    }
+  
+    .md-table pre code {
+      background: transparent;
+      padding: 0;
+    }
+  
+    /* Compact variant: <table class="md-table md-table--compact"> */
+    .md-table.md-table--compact th,
+    .md-table.md-table--compact td {
+      padding: 4px 8px;
+    }
+  
+    /* 1) Print-friendly tables */
+    @media print {
+      .md-table {
+        page-break-inside: avoid;
+      }
+  
+      .md-table thead th {
+        position: static;
+      }
+  
+      /* disable sticky in print */
+      .md-table caption {
+        padding-top: .25rem;
+      }
+    }
+  
+    /* 2) Long content niceties */
+    .md-table td,
+    .md-table th {
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+      /* helps with very long URLs/words */
+    }
+  
+  
+  
     /* Slow blink to indicate waiting for server response */
-@keyframes model-blink {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.25; }
-}
-.model-tag.blink-slow,
-#modelBadge.blink-slow {
-  animation: model-blink 1.4s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .model-tag.blink-slow,
-  #modelBadge.blink-slow { animation: none; }
-}
-
+    @keyframes model-blink {
+  
+      0%,
+      100% {
+        opacity: 1;
+      }
+  
+      50% {
+        opacity: 0.25;
+      }
+    }
+  
+    .model-tag.blink-slow,
+    #modelBadge.blink-slow {
+      animation: model-blink 1.4s ease-in-out infinite;
+    }
+  
+    @media (prefers-reduced-motion: reduce) {
+  
+      .model-tag.blink-slow,
+      #modelBadge.blink-slow {
+        animation: none;
+      }
+    }
+  
   
     /* Optional: tighten labels on small screens */
     @media (max-width: 900px) {
@@ -1199,8 +1374,8 @@
           bubble.insertAdjacentHTML(
             'beforeend',
             `<div class="stats-line" style="font-size:12px;color:var(--muted)">
-              Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps ? tps.toFixed(2) : ''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
-             </div>`
+                Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps ? tps.toFixed(2) : ''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
+               </div>`
           );
         }
 
@@ -1369,66 +1544,235 @@
       });
     }
 
+    
+
+
     function renderMarkdown(src) {
-      let s = '\n' + (src || '').replace(/\r/g, '');
-      const stash = [];
-      const STUB = i => `@@STUB${i}@@`;   // <— use one marker consistently
+        if (!src || typeof src !== 'string') return '';
 
-      const push = (html) => (stash.push(html), STUB(stash.length - 1));
+        let s = '\n' + (src || '').replace(/\r/g, '');
+        // Remove leading YAML front matter if present: --- ... ---
+        s = s.replace(/^\n---\r?\n[\s\S]*?\r?\n---\r?(?=\n|$)/, '');
 
-      const fenced = /(^|\n)(?<fence>```+|~~~+)[ \t]*([^\r\n]*)\r?\n([\s\S]*?)\n\k<fence>[ \t]*(?=\r?\n|$)/g;
+        // --- normalize blockquotes FIRST (supports nesting) ---
+        const BQ_OPEN = '@@BQ_OPEN@@';
+        const BQ_CLOSE = '@@BQ_CLOSE@@';
 
-      s = s.replace(fenced, (m, lead, _fence, info, code, _off, _str, groups) => {
-        const lang = (info.match(/^\s*([A-Za-z0-9_.+-]+)/) || [])[1] || '';
-        const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-        const cls = lang ? ` class="language-${lang}"` : '';
-        return lead + push(`<pre><code${cls}>${esc.replace(/\n$/, '')}</code></pre>`);
-      });
-      s = s.replace(/`([^`]+)`/g, (m, code) => {
-        const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-        return push(`<code>${esc}</code>`);
-      });
+        // Collapse any contiguous lines that start with ">" (possibly multiple) into
+        // depth-marked content using BQ_OPEN/BQ_CLOSE tokens (not HTML yet).
+        s = s.replace(/(?:^|\n)((?:>+[^\n]*\n?)+)(?=(?:\n[^>]|$))/g, (_m, block) => {
+          const lines = block.split('\n').filter(l => l.length || l === '');
+          let out = '', depth = 0;
 
-      // --- stash math ---
-      s = s.replace(/\$\$[\s\S]*?\$\$/g, m => push(m));
-      s = s.replace(/\\\[[\s\S]*?\\\]/g, m => push(m));
-      s = s.replace(/\\\([\s\S]*?\\\)/g, m => push(m));
+          for (const raw of lines) {
+            if (!raw) continue;
+            if (/^\\>/.test(raw)) {               // allow "\>" to mean a literal ">"
+              out += raw.slice(1) + '\n';
+              continue;
+            }
+            const m = raw.match(/^(>+)\s?(.*)$/); // count nesting
+            if (!m) continue;
+            const d = m[1].length;
+            const text = m[2] ?? '';
 
-      // $...$ inline math, but NOT $$, NOT `${`, not escaped `\$`, and no newlines
-      // $...$ inline math — not $$, not ${}, not escaped \$, no newlines
-      const inlineMath = /(?<![$\\])\$(?!\$|\{)((?:\\\.|[^\n$])+?)\$(?!\$)/g;
+            while (depth < d) { out += BQ_OPEN; depth++; }
+            while (depth > d) { out += BQ_CLOSE; depth--; }
+            out += text + '\n';
+          }
+          while (depth-- > 0) out += BQ_CLOSE;
+          return '\n' + out.replace(/\n$/, '\n');
+        });
 
-      s = s.replace(inlineMath, (m, body) => push(`$${body}$`));
+        const stash = [];
+        const STUB = i => `@@STUB${i}@@`;   // <— use one marker consistently
+
+        const push = (html) => {
+          // Inline-expand any existing placeholders so we don't create nested stubs
+          html = html.replace(/@@STUB(\d+)@@/g, (_, i) => stash[+i] ?? '');
+          stash.push(html);
+          return STUB(stash.length - 1);
+        };
+
+
+        const fenced = /(^|\n)(?<fence>```+|~~~+)[ \t]*([^\r\n]*)\r?\n([\s\S]*?)\n\k<fence>[ \t]*(?=\r?\n|$)/g;
+
+        s = s.replace(fenced, (m, lead, _fence, info, code, _off, _str, groups) => {
+          const lang = (info.match(/^\s*([A-Za-z0-9_.+-]+)/) || [])[1] || '';
+          const esc = code.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+          const cls = lang ? ` class="language-${lang}"` : '';
+          return lead + push(`<pre><code${cls}>${esc.replace(/\n$/, '')}</code></pre>`);
+        });
+        // handles `code`, ``code with `backticks````, and avoids spilling
+        s = s.replace(/(^|[^`])(`+)(?!`)([\s\S]*?)(?<!`)\2(?!`)/g,
+          (m, pre, ticks, body) => pre + push(`<code>${body.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))}</code>`));
+
+
+        // --- stash math ---
+        s = s.replace(/\$\$[\s\S]*?\$\$/g, m => push(m));
+        s = s.replace(/\\\[[\s\S]*?\\\]/g, m => push(m));
+        s = s.replace(/\\\([\s\S]*?\\\)/g, m => push(m));
+
+        // $...$ inline math, but NOT $$, NOT `${`, not escaped `\$`, and no newlines
+        // $...$ inline math — not $$, not ${}, not escaped \$, no newlines
+        const inlineMath = /(?<![$\\])\$(?!\$|\{)((?:\\.|[^\n$])+?)\$(?!\$)/g;
+
+
+        s = s.replace(inlineMath, (m, body) => push(`$${body}$`));
+
+
+        // --- GFM tables (|...|) ---
+        {
+          const splitCells = (row) =>
+            row.trim()
+              .replace(/^\|?/, '').replace(/\|?$/, '')
+              .split(/(?<!\\)\|/)                      // split on unescaped |
+              .map(c => c.replace(/\\\|/g, '|').trim());
+
+          const alignOf = (cell) => {
+            const s = cell.replace(/\s+/g, '');
+            if (/^:-{3,}:$/.test(s)) return 'center';
+            if (/^:-{3,}$/.test(s)) return 'left';
+            if (/^-{3,}:$/.test(s)) return 'right';
+            return 'left';
+          };
+
+          // GFM table block: header row, alignment row, then 0+ body rows
+          const tableBlock =
+            /(?:^|\n)([ \t]*\|.*\|?[ \t]*)\r?\n([ \t]*\|?[ \t]*:?-{3,}:?(?:\|[ \t]*:?-{3,}:?)+\|?[ \t]*)(?:\r?\n((?:[ \t]*\|.*\|?[ \t]*\r?\n?)*))?/g;
+
+
+          s = s.replace(tableBlock, (_m, head, sep, body = '') => {
+            const headers = splitCells(head);
+            const aligns = splitCells(sep).map(alignOf);
+            const n = Math.max(headers.length, aligns.length);
+
+            const rows = body.split(/\r?\n/)
+              .filter(l => /\|/.test(l.trim()) && !/^\s*$/.test(l))
+              .map(splitCells)
+              .map(cells => cells.length < n ? cells.concat(Array(n - cells.length).fill('')) : cells);
+
+            const th = headers.slice(0, n).map((h, i) => `<th style="text-align:${aligns[i] || 'left'}">${h}</th>`).join('');
+            const tr = rows.map(r =>
+              `<tr>${r.slice(0, n).map((c, i) => `<td style="text-align:${(aligns[i] || 'left')}">${c}</td>`).join('')}</tr>`
+            ).join('');
+
+            return '\n' + push(
+              `<table class="md-table"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`
+            ) + '\n';
+          });
+        }
+
+
+
+        // --- escape only non-stashed text ---
+        s = s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        // Setext H1: text + line of ===
+        s = s.replace(/(?:^|\n)([^\n]+)\n[ \t]*={2,}[ \t]*(?=\n|$)/g, (_m, t) => `\n<h1>${t.trim()}</h1>`);
+
+        // Setext H2: text + line of ---
+        s = s.replace(/(?:^|\n)([^\n]+)\n[ \t]*-{2,}[ \t]*(?=\n|$)/g, (_m, t) => `\n<h2>${t.trim()}</h2>`);
 
 
 
 
-      // --- escape only non-stashed text ---
-      s = s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        // --- lightweight markdown on non-code/math ---
 
-      // --- lightweight markdown on non-code/math ---
-      s = s.replace(/^\n######\s*(.*)$/gm, '<h6>$1</h6>')
-        .replace(/^\n#####\s*(.*)$/gm, '<h5>$1</h5>')
-        .replace(/^\n####\s*(.*)$/gm, '<h4>$1</h4>')
-        .replace(/^\n###\s*(.*)$/gm, '<h3>$1</h3>')
-        .replace(/^\n##\s*(.*)$/gm, '<h2>$1</h2>')
-        .replace(/^\n#\s*(.*)$/gm, '<h1>$1</h1>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(/\b(https?:\/\/[^\s)]+)\b/g, m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`)
-        .replace(/(?:^|\n)(-\s+.+)(?=\n[^-\s]|$)/g, block => {
-          const items = block.trim().split(/\n-\s+/).filter(Boolean)
-            .map((x, i) => i === 0 ? x.replace(/^-+\s*/, '') : x);
-          return '\n<ul>' + items.map(x => `<li>${x}</li>`).join('') + '</ul>';
-        })
-        .replace(/\n{2,}/g, '</p><p>');
+        (() => {
+          const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const BQO = esc('@@BQ_OPEN@@');
 
-      // --- restore stashed content (defensively handle both prefixes) ---
-      s = s.replace(/@@STUB(\d+)@@/g, (_, i) => stash[+i])
-        .replace(/@@MATH(\d+)@@/g, (_, i) => stash[+i] ?? ''); // if any old MATH tokens linger
+          // ATX headings — CommonMark rules, works inside blockquotes
+          for (let level = 6; level >= 1; level--) {
+            const re = new RegExp(
+              `(^|\\n|${BQO})#{${level}}[ \\t]+([^\\n]+?)\\s*#*\\s*(?=$|\\n)`,
+              'g'
+            );
+            s = s.replace(re, (m, prefix, text) => {
+              const keepPrefix = prefix === '@@BQ_OPEN@@' ? '@@BQ_OPEN@@' : (prefix || '');
+              return `${keepPrefix}<h${level}>${text.trim()}</h${level}>`;
+            });
+          }
 
-      return '<p>' + s.trim() + '</p>';
-    }
+          // Bold / italic
+          s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+          // Auto-links
+          s = s.replace(/\b(https?:\/\/[^\s)]+)\b/g,
+            m => `<a href="${m}" target="_blank" rel="noopener">${m}</a>`
+          );
+
+          // Unordered lists (CommonMark-ish): up to 3 leading spaces, -, +, *;
+          // works after blank lines and inside @@BQ_OPEN@@ blocks.
+          (() => {
+            const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const BQO = esc('@@BQ_OPEN@@');
+
+            const liStart = `(?:${BQO})?[ \\t]{0,3}[-+*][ \\t]+`;
+            const listBlock = new RegExp(
+              `(?:^|\\n)(${liStart}[^\\n]*(?:\\n${liStart}[^\\n]*)*)(?=(?:\\n(?!${liStart})|$))`,
+              'g'
+            );
+
+            s = s.replace(listBlock, (_m, block) => {
+              const liHead = new RegExp(`^${liStart}`);
+              const items = block.split('\n').map(line => line.replace(liHead, '').trim());
+
+              // GFM checkboxes: - [ ] … / - [x] …
+              const renderItem = txt =>
+                txt.replace(/^\[( |x|X)\][ \t]*/, (_m, c) =>
+                  `<input type="checkbox" disabled ${c.toLowerCase() === 'x' ? 'checked' : ''}/> `
+                );
+
+              return '\n<ul>' + items.map(x => `<li>${renderItem(x)}</li>`).join('') + '</ul>';
+            });
+          })();
+
+
+          // Horizontal rules
+          s = s.replace(/^\n?[ \t]*([*_ -])(?:[ \t]*\1){2,}[ \t]*$(?=\n|$)/gm,
+            '\n<hr class="md-hr"/>\n');
+
+          // Paragraph breaks
+          s = s.replace(/\n{2,}/g, '</p><p>');
+        })();
+
+
+        // Unwrap standalone <hr> accidentally placed inside <p>…</p>
+        s = s.replace(/<p>\s*(<hr\b[^>]*>)\s*<\/p>/g, '$1');
+
+
+        // --- turn blockquote tokens into HTML ---
+        s = s.replace(/@@BQ_OPEN@@/g, '<blockquote>')
+          .replace(/@@BQ_CLOSE@@/g, '</blockquote>');
+
+
+        // --- restore stashed content (defensively handle both prefixes) ---
+        // --- restore stashed content fully (handles nested cases) ---
+        let guard = 0;
+        while (/@@STUB\d+@@/.test(s) && guard++ < 20) {
+          s = s.replace(/@@STUB(\d+)@@/g, (_, i) => stash[+i] ?? '');
+        }
+        // (Optional: remove legacy MATH line; you don't create @@MATH...@@ anymore)
+        // s = s.replace(/@@MATH(\d+)@@/g, (_, i) => stash[+i] ?? '');
+
+        s = s.replace(/@@BQ_OPEN@@/g, '')
+          .replace(/@@BQ_CLOSE@@/g, '');
+
+        // Unwrap tables from accidental <p>…</p>
+        s = s.replace(/<p>\s*(<table\b[\s\S]*?<\/table>)\s*<\/p>/g, '$1');
+        // Unwrap lists and blockquotes accidentally placed inside <p>…</p>
+        const unwrapRE = new RegExp(
+          '<p>\\s*((?:<(?:table|ul|ol|blockquote)\\b[\\s\\S]*?<\\/(?:table|ul|ol|blockquote)>))\\s*<\\/p>',
+          'g'
+        );
+        s = s.replace(unwrapRE, '$1');
+
+
+
+
+        return '<p>' + s.trim() + '</p>';
+      }
 
 
 
@@ -1516,289 +1860,289 @@
 
     // Send message
     async function send() {
-        if (running) return;
-        let userText = inputEl.value.trim();
-        if (!userText) return;
-        const extra = await readTextAttachments(pendingFiles);
-        if (extra)
-          userText = userText + extra;
+      if (running) return;
+      let userText = inputEl.value.trim();
+      if (!userText) return;
+      const extra = await readTextAttachments(pendingFiles);
+      if (extra)
+        userText = userText + extra;
 
-        pendingFiles.length = 0;
-        attachmentsDiv.innerHTML = '';
-        let pendingModelTagEl = null;
+      pendingFiles.length = 0;
+      attachmentsDiv.innerHTML = '';
+      let pendingModelTagEl = null;
 
 
-        setStamp();
-        running = true;
-        sendBtn.disabled = true; stopBtn.disabled = false;
-        setStatus('busy', 'Querying');
-        updateModelBadge(modelSelect.value || 'lmstudio');
+      setStamp();
+      running = true;
+      sendBtn.disabled = true; stopBtn.disabled = false;
+      setStatus('busy', 'Querying');
+      updateModelBadge(modelSelect.value || 'lmstudio');
 
-        if (messages.length === 0 && sysEl.value.trim()) {
-          messages.push({ role: 'system', content: sysEl.value.trim() });
-          const sysNode = addMessage('system', sysEl.value.trim());
-          sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
-          sysNode.classList.add('markdown');
+      if (messages.length === 0 && sysEl.value.trim()) {
+        messages.push({ role: 'system', content: sysEl.value.trim() });
+        const sysNode = addMessage('system', sysEl.value.trim());
+        sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
+        sysNode.classList.add('markdown');
+      }
+
+      messages.push({ role: 'user', content: userText });
+      const userNode = addMessage('user', userText);
+      userNode.innerHTML = renderMarkdown(userText);
+      userNode.classList.add('markdown');
+      inputEl.value = '';
+      saveSession();
+      // Check if selected model is embedding-only
+      const selectedOption = modelSelect.selectedOptions[0];
+      if (selectedOption && selectedOption.disabled) {
+        assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
+        assistantNode.innerHTML = `<span class="error">Selected model is for embedding only and cannot be used for chat.</span>`;
+        running = false;
+        sendBtn.disabled = false; stopBtn.disabled = true;
+        setStatus('offline', 'Embedding model');
+        return;
+      }
+
+      const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
+      // Grab the newly added assistant message wrapper and its model tag
+      const assistantWrap = threadEl.lastElementChild;
+      pendingModelTagEl = assistantWrap?.querySelector('.model-tag') || null;
+
+      // Start blinking: message tag + header badge (and show the badge while waiting)
+      if (pendingModelTagEl) pendingModelTagEl.classList.add('blink-slow');
+      if (false && modelBadge) {
+        modelBadge.style.display = 'inline-block';
+        modelBadge.classList.add('blink-slow');
+      }
+
+      // prepare request
+      const payload = {
+        model: modelSelect.value || 'lmstudio',
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        stream: true,
+        temperature: Number(tempEl.value || 0.7),
+        max_tokens: Number(maxTEl.value || 100000)
+      };
+
+      const headers = { 'Content-Type': 'application/json' };
+      const key = apiKeyEl.value.trim();
+      if (key) headers['Authorization'] = 'Bearer ' + key;
+
+      const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
+      controller = new AbortController();
+
+      let assistantAccum = '';
+      let pendingChunk = '';
+      let scheduled = false;
+      let lastRenderTime = 0;
+      let currentStreamingModel = modelSelect.value || 'lmstudio';
+
+      const flush = () => {
+        // allow future scheduling
+        scheduled = false;
+        if (!pendingChunk) return;
+
+        assistantAccum += pendingChunk;
+        pendingChunk = '';
+
+        const now = Date.now();
+        // throttle updates to let MathJax breathe
+        if (now - lastRenderTime < 30) {
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(flush);
+          }
+          return;
         }
+        lastRenderTime = now;
 
-        messages.push({ role: 'user', content: userText });
-        const userNode = addMessage('user', userText);
-        userNode.innerHTML = renderMarkdown(userText);
-        userNode.classList.add('markdown');
-        inputEl.value = '';
-        saveSession();
-        // Check if selected model is embedding-only
-        const selectedOption = modelSelect.selectedOptions[0];
-        if (selectedOption && selectedOption.disabled) {
-          assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
-          assistantNode.innerHTML = `<span class="error">Selected model is for embedding only and cannot be used for chat.</span>`;
-          running = false;
-          sendBtn.disabled = false; stopBtn.disabled = true;
-          setStatus('offline', 'Embedding model');
+        if (!(liveFmtEl && liveFmtEl.checked)) {
+          assistantNode.textContent = assistantAccum;
+          scrollToBottomIfNeeded();
           return;
         }
 
-        const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
-        // Grab the newly added assistant message wrapper and its model tag
-        const assistantWrap = threadEl.lastElementChild;
-        pendingModelTagEl = assistantWrap?.querySelector('.model-tag') || null;
+        // Double-buffered render: build off-screen, typeset there, then swap
+        const shadow = ensureShadow();
 
-        // Start blinking: message tag + header badge (and show the badge while waiting)
-        if (pendingModelTagEl) pendingModelTagEl.classList.add('blink-slow');
-        if (false && modelBadge) {
-          modelBadge.style.display = 'inline-block';
-          modelBadge.classList.add('blink-slow');
+        // If a typeset is running, queue and bail; we'll re-run flush after it completes
+        if (shadowBusy) {
+          shadowQueued = true;
+          return;
         }
+        shadowBusy = true;
 
-        // prepare request
-        const payload = {
-          model: modelSelect.value || 'lmstudio',
-          messages: messages.map(m => ({ role: m.role, content: m.content })),
-          stream: true,
-          temperature: Number(tempEl.value || 0.7),
-          max_tokens: Number(maxTEl.value || 100000)
-        };
-
-        const headers = { 'Content-Type': 'application/json' };
-        const key = apiKeyEl.value.trim();
-        if (key) headers['Authorization'] = 'Bearer ' + key;
-
-        const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
-        controller = new AbortController();
-
-        let assistantAccum = '';
-        let pendingChunk = '';
-        let scheduled = false;
-        let lastRenderTime = 0;
-        let currentStreamingModel = modelSelect.value || 'lmstudio';
-
-        const flush = () => {
-          // allow future scheduling
-          scheduled = false;
-          if (!pendingChunk) return;
-
-          assistantAccum += pendingChunk;
-          pendingChunk = '';
-
-          const now = Date.now();
-          // throttle updates to let MathJax breathe
-          if (now - lastRenderTime < 30) {
-            if (!scheduled) {
-              scheduled = true;
-              requestAnimationFrame(flush);
-            }
-            return;
-          }
-          lastRenderTime = now;
-
-          if (!(liveFmtEl && liveFmtEl.checked)) {
-            assistantNode.textContent = assistantAccum;
-            scrollToBottomIfNeeded();
-            return;
-          }
-
-          // Double-buffered render: build off-screen, typeset there, then swap
-          const shadow = ensureShadow();
-
-          // If a typeset is running, queue and bail; we'll re-run flush after it completes
-          if (shadowBusy) {
-            shadowQueued = true;
-            return;
-          }
-          shadowBusy = true;
-
-          shadow.innerHTML = renderMarkdown(assistantAccum);
+        shadow.innerHTML = renderMarkdown(assistantAccum);
 
 
-          const doTypeset = async () => {
-            try {
-              await ensureMathJax();
-              await MathJax.typesetPromise([shadow]);
-            } catch (e) {
-              console.warn('MathJax typeset (shadow) failed:', e);
-            } finally {
-              // Atomic swap
-              assistantNode.innerHTML = shadow.innerHTML;
-              assistantNode.classList.add('markdown');
-              scrollToBottomIfNeeded();
-              shadowBusy = false;
-
-              if (shadowQueued) {
-                shadowQueued = false;
-                scheduled = true;
-                requestAnimationFrame(flush);
-              }
-            }
-          };
-          doTypeset();
-        };
-
-        const startTime = Date.now(); // NEW: mark start time
-        let completionTokens = 0; // NEW
-        try {
-          const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
-          if (!res.ok || !res.body) {
-            let msg = `HTTP ${res.status}`;
-            try {
-              const text = await res.text();
-              const j = JSON.parse(text);
-              if (j?.error?.message) msg += ` — ${j.error.message}`;
-              else if (text) msg += ` — ${text}`;
-            } catch { /* ignore parse failure */ }
-            assistantNode.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
-            throw new Error(msg);
-          }
-          for await (const raw of streamLines(res.body.getReader())) {
-            if (raw === '[DONE]') break;
-            try {
-              const obj = JSON.parse(raw);
-              if (obj.error) {
-                const msg = obj.error.message || JSON.stringify(obj.error);
-                pendingChunk += `\n\n[ERROR] ${msg}`;
-                if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
-                continue;
-              }
-              if (obj.usage?.completion_tokens) { // NEW
-                completionTokens = obj.usage.completion_tokens;
-              }
-              const choice = obj.choices?.[0];
-              if (obj.model) {
-                updateModelBadge(obj.model);
-                currentStreamingModel = obj.model;
-              }
-              const delta = choice?.delta || choice; // support both chat.delta and plain text
-              const token = delta?.content || delta?.text || '';
-              if (!token) continue;
-              pendingChunk += token;
-              if (!scheduled) {
-                scheduled = true;
-                requestAnimationFrame(flush);
-              }
-            } catch {
-              continue; // keep-alives/comments
-            }
-          }
-          setStatus('online', 'Connected');
-        } catch (err) {
-          if (err.name === 'AbortError') {
-            pendingChunk += '\n\n[stopped]';
-            if (!scheduled) {
-              scheduled = true;
-              requestAnimationFrame(flush);
-            }
-            setStatus('online', 'Stopped');
-          } else {
-            const em = `\n\n[error] ${err.message}`;
-            pendingChunk += em;
-            if (!scheduled) {
-              scheduled = true;
-              requestAnimationFrame(flush);
-            }
-            setStatus('offline', 'Offline');
-          }
-        } finally {
-
-          const endTime = Date.now();             // NEW: mark end time
-          const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
-
-          // finalize assistant message in state using the same shadow swap
-          if (pendingChunk) {
-            // ensure last chunk makes it in
-            assistantAccum += pendingChunk;
-            pendingChunk = '';
-          }
-
-          // final render via double-buffer path
-          const shadow = ensureShadow();
-          shadow.innerHTML = renderMarkdown(assistantAccum);
+        const doTypeset = async () => {
           try {
             await ensureMathJax();
             await MathJax.typesetPromise([shadow]);
           } catch (e) {
-            console.warn('Final MathJax typeset failed:', e);
+            console.warn('MathJax typeset (shadow) failed:', e);
+          } finally {
+            // Atomic swap
+            assistantNode.innerHTML = shadow.innerHTML;
+            assistantNode.classList.add('markdown');
+            scrollToBottomIfNeeded();
+            shadowBusy = false;
+
+            if (shadowQueued) {
+              shadowQueued = false;
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
           }
-          // NEW: count tokens from accumulated text
+        };
+        doTypeset();
+      };
 
-          function smartTokenEstimate(text) {
-            if (!text || text.trim().length === 0) return 0;
-
-            // Count different types of characters
-            const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-            const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
-            const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
-
-            // Count ASCII and other characters
-
-            const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
-            const otherChars = text.length - chineseChars - japaneseChars - koreanChars - specialChars;
-
-            // Asian characters are typically 1 token each
-            const asianTokens = chineseChars + japaneseChars + koreanChars;
-
-            // Other characters use the old heuristic
-            const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
-
-            return asianTokens + otherTokens + specialChars;
-          }
-
-          const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
-
-
-          const tpsNum = (elapsedSec > 0 && tokenCount > 0)
-            ? (tokenCount / elapsedSec)
-            : NaN;
-
-          // display text (for the bubble)
-          const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
-
-          const statsLine = `<div style="font-size:12px;color:var(--muted)">
-          Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
-        </div>`;
-
-          assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
-          assistantNode.classList.add('markdown');
-          addCopyButtons(assistantNode);
-
-          messages.push({
-            role: 'assistant',
-            content: assistantAccum,
-            model: currentStreamingModel,
-            stats: { tokens: tokenCount, timeSec: elapsedSec, tps: Number.isFinite(tpsNum) ? +tpsNum.toFixed(2) : null, endTime: endTime }
-          });
-
-          running = false;
-          sendBtn.disabled = false; stopBtn.disabled = true;
-          // Stop blinking and (optionally) hide the badge again
-          if (pendingModelTagEl) pendingModelTagEl.classList.remove('blink-slow');
-          if (modelBadge) {
-            modelBadge.classList.remove('blink-slow');
-            modelBadge.style.display = 'none'; // keep header clean when idle
-          }
-
-          controller = null;
-          saveSession();
+      const startTime = Date.now(); // NEW: mark start time
+      let completionTokens = 0; // NEW
+      try {
+        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
+        if (!res.ok || !res.body) {
+          let msg = `HTTP ${res.status}`;
+          try {
+            const text = await res.text();
+            const j = JSON.parse(text);
+            if (j?.error?.message) msg += ` — ${j.error.message}`;
+            else if (text) msg += ` — ${text}`;
+          } catch { /* ignore parse failure */ }
+          assistantNode.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
+          throw new Error(msg);
         }
+        for await (const raw of streamLines(res.body.getReader())) {
+          if (raw === '[DONE]') break;
+          try {
+            const obj = JSON.parse(raw);
+            if (obj.error) {
+              const msg = obj.error.message || JSON.stringify(obj.error);
+              pendingChunk += `\n\n[ERROR] ${msg}`;
+              if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
+              continue;
+            }
+            if (obj.usage?.completion_tokens) { // NEW
+              completionTokens = obj.usage.completion_tokens;
+            }
+            const choice = obj.choices?.[0];
+            if (obj.model) {
+              updateModelBadge(obj.model);
+              currentStreamingModel = obj.model;
+            }
+            const delta = choice?.delta || choice; // support both chat.delta and plain text
+            const token = delta?.content || delta?.text || '';
+            if (!token) continue;
+            pendingChunk += token;
+            if (!scheduled) {
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+          } catch {
+            continue; // keep-alives/comments
+          }
+        }
+        setStatus('online', 'Connected');
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          pendingChunk += '\n\n[stopped]';
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(flush);
+          }
+          setStatus('online', 'Stopped');
+        } else {
+          const em = `\n\n[error] ${err.message}`;
+          pendingChunk += em;
+          if (!scheduled) {
+            scheduled = true;
+            requestAnimationFrame(flush);
+          }
+          setStatus('offline', 'Offline');
+        }
+      } finally {
+
+        const endTime = Date.now();             // NEW: mark end time
+        const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
+
+        // finalize assistant message in state using the same shadow swap
+        if (pendingChunk) {
+          // ensure last chunk makes it in
+          assistantAccum += pendingChunk;
+          pendingChunk = '';
+        }
+
+        // final render via double-buffer path
+        const shadow = ensureShadow();
+        shadow.innerHTML = renderMarkdown(assistantAccum);
+        try {
+          await ensureMathJax();
+          await MathJax.typesetPromise([shadow]);
+        } catch (e) {
+          console.warn('Final MathJax typeset failed:', e);
+        }
+        // NEW: count tokens from accumulated text
+
+        function smartTokenEstimate(text) {
+          if (!text || text.trim().length === 0) return 0;
+
+          // Count different types of characters
+          const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+          const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
+          const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
+
+          // Count ASCII and other characters
+
+          const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
+          const otherChars = text.length - chineseChars - japaneseChars - koreanChars - specialChars;
+
+          // Asian characters are typically 1 token each
+          const asianTokens = chineseChars + japaneseChars + koreanChars;
+
+          // Other characters use the old heuristic
+          const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
+
+          return asianTokens + otherTokens + specialChars;
+        }
+
+        const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
+
+
+        const tpsNum = (elapsedSec > 0 && tokenCount > 0)
+          ? (tokenCount / elapsedSec)
+          : NaN;
+
+        // display text (for the bubble)
+        const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
+
+        const statsLine = `<div style="font-size:12px;color:var(--muted)">
+            Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
+          </div>`;
+
+        assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
+        assistantNode.classList.add('markdown');
+        addCopyButtons(assistantNode);
+
+        messages.push({
+          role: 'assistant',
+          content: assistantAccum,
+          model: currentStreamingModel,
+          stats: { tokens: tokenCount, timeSec: elapsedSec, tps: Number.isFinite(tpsNum) ? +tpsNum.toFixed(2) : null, endTime: endTime }
+        });
+
+        running = false;
+        sendBtn.disabled = false; stopBtn.disabled = true;
+        // Stop blinking and (optionally) hide the badge again
+        if (pendingModelTagEl) pendingModelTagEl.classList.remove('blink-slow');
+        if (modelBadge) {
+          modelBadge.classList.remove('blink-slow');
+          modelBadge.style.display = 'none'; // keep header clean when idle
+        }
+
+        controller = null;
+        saveSession();
       }
+    }
 
     // Handlers
     sendBtn.addEventListener('click', send);
