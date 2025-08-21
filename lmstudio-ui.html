@@ -727,15 +727,15 @@
     }
   
     /* Subtle hairline 
-    .md-hr {
-      border: 0;
-      border-top: 1px solid currentColor;
-      opacity: .2;
-      margin: .6rem 0 .8rem;
-    }
-    
-    .md-hr { border-top: 1px dotted currentColor; opacity: .35; }
-    */
+              .md-hr {
+                border: 0;
+                border-top: 1px solid currentColor;
+                opacity: .2;
+                margin: .6rem 0 .8rem;
+              }
+              
+              .md-hr { border-top: 1px dotted currentColor; opacity: .35; }
+              */
   
     /* Or: spacer only (no visible line) */
     .md-hr {
@@ -781,9 +781,9 @@
       background: var(--md-table-bg);
       color: var(--md-table-text);
       /* If you can't add the wrapper, uncomment next two lines for self-scrolling
-      display:block;
-      overflow-x:auto;
-      */
+                display:block;
+                overflow-x:auto;
+                */
     }
   
     /* Header */
@@ -888,6 +888,48 @@
     }
   
   
+    .llm-think {
+      margin: .5rem 0;
+    }
+  
+    .llm-think>summary {
+      cursor: pointer;
+      font-weight: 600;
+      opacity: .8;
+    }
+  
+    .llm-think pre {
+      white-space: pre-wrap;
+      margin: .5rem 0 0;
+    }
+  
+    /* Reasoning block: clamp height and allow scrolling */
+    .llm-think {
+      margin: .5rem 0;
+    }
+  
+    /* Show ALL reasoning (no inner scrollbar) */
+    .bubble.markdown details.llm-think>pre {
+      max-height: none !important;
+      overflow: visible !important;
+    }
+  
+  
+    .llm-think>pre>code {
+      white-space: pre-wrap;
+      /* wrap long lines */
+      word-break: break-word;
+      /* prevent overflow with super-long tokens */
+    }
+  
+    /* Ensure the reasoning viewport actually scrolls */
+    details.llm-think>pre {
+      max-height: 40vh;
+      /* !important if you must override earlier pre rules */
+      overflow: auto;
+    }
+  
+  
   
     /* Slow blink to indicate waiting for server response */
     @keyframes model-blink {
@@ -934,13 +976,23 @@
   <header>
     <div class="bar">
       <div class="left">
-        <label>API Base</label>
-        <input id="apiBase" type="text" value="http://localhost:1234/v1" size="26" />
+     <!-- REPLACE THIS: API Base label + preset + input -->
+<label for="serverSelect">LLM Server</label>
+<div class="api-combo" style="display:flex; gap:6px; align-items:center;">
+  <select id="serverSelect" aria-label="LLM server"></select>
+  <button id="manageServers" class="btn ghost" title="Add/Edit servers">⚙️</button>
+</div>
+
+
+
         <label>Model</label>
-        <select id="modelSelect">
+        <select id="modelSelect" title="Model selection">
           <option value="">Loading models...</option>
         </select>
         <button class="btn ghost" id="refreshModels" title="Refresh models">↻</button>
+
+      
+
       </div>
       <div class="right">
         <span class="status" id="status">
@@ -957,6 +1009,7 @@
     
             <button class="menu-item" id="printBtn" role="menuitem">🖨 Print</button>
             <button class="menu-item" id="exportBtn" role="menuitem">⬇︎ Export</button>
+            <button class="menu-item" id="clearChatBtn" role="menuitem">🗑 Clear chat</button>
             <div class="menu-sep" aria-hidden="true"></div>
             <button class="menu-item" id="historyBtn" role="menuitem">📜 History</button>
           </div>
@@ -988,566 +1041,627 @@
     <div class="wrap">
       <textarea id="input" placeholder="Type a message… (Shift+Enter for newline)"></textarea>
       <div class="actions">
-        <input id="systemPrompt" type="text" placeholder="System prompt (optional)" style="flex:1" />
-        <input id="apiKey" type="password" placeholder="API key (optional)" style="width: 14rem" />
+        
         <label>Temp <input id="temp" type="number" step="0.1" min="0" max="2" value="0.7"></label>
         <label>MaxTokens <input id="maxT" type="number" step="1" min="1" value="100000"></label>
+          <label title="Disable streaming responses">
+          <input type="checkbox" id="DoStream" checked> Stream
+        </label>
         <label title="Live-format Markdown while streaming"><input type="checkbox" id="liveFmt" checked>Format</label>
         <label class="attach-btn">
           <input id="file-input" type="file" multiple hidden>
           📎 Attach
         </label>
         <div id="attachments" class="attachments"></div>
-        <div class="actions-inline" style="display:flex; gap:8px; align-items:center;">
+        <div class="actions-inline" style="display:flex; gap:8px; align-items:center; margin-left:auto;"></div>
           <button class="btn primary" id="sendBtn">Send</button>
           <button class="btn" id="stopBtn" disabled>Stop</button>
         </div>
       </div>
     </div>
-  </div>
+    </div>
 
-  <script>
-    // --- Minimal state ---
-    const threadEl = document.getElementById('thread');
-    const inputEl = document.getElementById('input');
-    const sysEl = document.getElementById('systemPrompt');
-    const apiBaseEl = document.getElementById('apiBase');
-    const modelSelect = document.getElementById('modelSelect');
-    const apiKeyEl = document.getElementById('apiKey');
-    const tempEl = document.getElementById('temp');
-    const maxTEl = document.getElementById('maxT');
-    const liveFmtEl = document.getElementById('liveFmt');
-    const sendBtn = document.getElementById('sendBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const printBtn = document.getElementById('printBtn');
-    const exportBtn = document.getElementById('exportBtn');
-    const newBtn = document.getElementById('newBtn');
-    const titleEl = document.getElementById('title');
-    const stampEl = document.getElementById('stamp');
-    const printHeader = document.getElementById('printHeader');
-    const statusEl = document.getElementById('status');
-    const modelBadge = document.getElementById('modelBadge');
-    const historyBtn = document.getElementById('historyBtn');
-    const historyPanel = document.getElementById('historyPanel');
-    const historyList = document.getElementById('historyList');
+    <dialog id="serverMgr" style="max-width:640px;border:1px solid #2a2f3a;border-radius:12px;background:var(--panel);color:var(--fg);padding:16px;">
+  <form method="dialog" style="display:grid;gap:10px;">
+    <h3 style="margin:0;color:var(--muted);">LLM Servers</h3>
 
-    let messages = [];
-    let running = false;
-    let controller = null;
-    let currentModel = '';
-    let sessionId = null;
-    let chatHistory = [];
-    let mathjaxLoading = false;
-    let mathjaxPromise = null;
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="serverList" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;"></select>
+      <button id="newServerBtn" class="btn" type="button">＋ New</button>
+      <button id="deleteServerBtn" class="btn" type="button">🗑 Delete</button>
+    </div>
 
-    const fileInput = document.getElementById('file-input');
-    const attachmentsDiv = document.getElementById('attachments');
-    const pendingFiles = []; // { file, id }
+    <label style="font-size:12px;color:var(--muted)">Name
+      <input id="serverName" type="text" required
+             style="width:100%;background:var(--panel);color:var(--fg);border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;">
+    </label>
 
-    fileInput.addEventListener('change', () => {
-      for (const file of fileInput.files) addAttachment(file);
-      fileInput.value = ''; // allow picking the same file again later
-    });
+    <label style="font-size:12px;color:var(--muted)">Base URL (e.g. http://localhost:1234/v1)
+      <input id="serverBase" type="text" required
+             placeholder="http://host:port/v1"
+             style="width:100%;background:var(--panel);color:var(--fg);border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;">
+    </label>
 
-    function addAttachment(file) {
-      const id = crypto.randomUUID();
-      pendingFiles.push({ file, id });
-      const chip = document.createElement('div');
-      chip.className = 'attach-chip';
-      chip.dataset.id = id;
-      chip.textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
-      const x = document.createElement('button');
-      x.textContent = '✕';
-      x.title = 'Remove';
-      x.onclick = () => {
-        const ix = pendingFiles.findIndex(p => p.id === id);
-        if (ix !== -1) pendingFiles.splice(ix, 1);
-        chip.remove();
-      };
-      chip.appendChild(x);
-      attachmentsDiv.appendChild(chip);
-    }
+    <label style="font-size:12px;color:var(--muted)">API Key
+  <input id="serverApiKey" type="password" placeholder="sk-..." 
+         style="width:100%;background:var(--panel);color:var(--fg);
+                border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;">
+</label>
 
-    async function readTextAttachments(files) {
-      const textParts = [];
-      const longestRun = (s, ch) => {
-        let best = 0, cur = 0;
-        for (const c of s) {
-          if (c === ch) { cur++; best = Math.max(best, cur); }
-          else cur = 0;
-        }
-        return best;
-      };
-      for (const { file } of files) {
-        if (/^text\/|application\/(json|xml|.*markdown)/i.test(file.type)) {
-          // Guardrails: read only the first maxChars to avoid loading the entire file
-          const maxChars = 400_000; // tune to your context window
-          const head = await file.slice(0, maxChars).text();
-          const truncated = file.size > maxChars;
-          const body = truncated ? head + "\n…[truncated]" : head;
-          const maxTicks = Math.max(3, longestRun(body, '`') + 1);
-          const fence = '`'.repeat(maxTicks);
-          textParts.push(`\n\n[Attachment: ${file.name} (${body.length})]\n${fence}\n${body}\n${fence}\n`);
-        }
-      }
-      return textParts.join('');
-    }
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <label style="font-size:12px;color:var(--muted)">Models Path
+        <input id="serverModelsPath" type="text" value="/models"
+               style="width:100%;background:var(--panel);color:var(--fg);border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;">
+      </label>
+      <label style="font-size:12px;color:var(--muted)">Chat Path
+        <input id="serverChatPath" type="text" value="/chat/completions"
+               style="width:100%;background:var(--panel);color:var(--fg);border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;">
+      </label>
+    </div>
+
+    <label style="font-size:12px;color:var(--muted)">Default System Prompt (applied when empty)
+      <textarea id="serverSystem" rows="4"
+                style="width:100%;background:var(--panel);color:var(--fg);border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;"></textarea>
+    </label>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;">
+      <!-- NEW -->
+      <button id="cancelServerBtn" class="btn ghost" type="button">Cancel</button>
+
+      <button id="saveServerBtn" class="btn primary" type="submit" value="default">Save</button>
+    </div>
+  </form>
+</dialog>
+
+    
+    <script>
+      // --- Minimal state ---
+      const threadEl = document.getElementById('thread');
+      const inputEl = document.getElementById('input');
+
+      const modelSelect = document.getElementById('modelSelect');
+
+      const tempEl = document.getElementById('temp');
+      const maxTEl = document.getElementById('maxT');
+      const liveFmtEl = document.getElementById('liveFmt');
+      const sendBtn = document.getElementById('sendBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const printBtn = document.getElementById('printBtn');
+      const exportBtn = document.getElementById('exportBtn');
+      const newBtn = document.getElementById('newBtn');
+      const titleEl = document.getElementById('title');
+      const stampEl = document.getElementById('stamp');
+      const printHeader = document.getElementById('printHeader');
+      const statusEl = document.getElementById('status');
+      const modelBadge = document.getElementById('modelBadge');
+      const historyBtn = document.getElementById('historyBtn');
+      const historyPanel = document.getElementById('historyPanel');
+      const historyList = document.getElementById('historyList');
+      const doStreamEl = document.getElementById('DoStream');
 
 
 
-    // --- Shadow buffer for double-buffered MathJax rendering ---
-    let shadowBuf = null, shadowBusy = false, shadowQueued = false;
-    function ensureShadow() {
-      if (shadowBuf) return shadowBuf;
-      shadowBuf = document.createElement('div');
-      shadowBuf.style.position = 'absolute';
-      shadowBuf.style.left = '-99999px';
-      shadowBuf.style.top = '0';
-      shadowBuf.className = 'bubble markdown';
-      document.body.appendChild(shadowBuf);
-      return shadowBuf;
-    }
-
-    // Generate unique session ID
-    function generateSessionId() {
-      return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    }
-
-    // Load all chat sessions from localStorage
-    function loadChatHistory() {
-      chatHistory = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('lmstudio_session_') && key !== 'lmstudio_session_id') {
-          try {
-            const data = JSON.parse(localStorage.getItem(key));
-            if (data && data.title) {
-              chatHistory.push({
-                id: key.replace('lmstudio_session_', ''),
-                title: data.title,
-                timestamp: data.timestamp || new Date().toISOString()
-              });
-            }
-          } catch (e) {
-            console.error('Failed to parse session:', key, e);
-          }
-        }
-      }
-      chatHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      renderChatHistory();
-    }
-
-    // Render chat history panel
-    function renderChatHistory() {
-      historyList.innerHTML = '';
 
 
-      // --- header with "Delete all" ---
-      const header = document.createElement('div');
-      header.className = 'history-header';
+      let messages = [];
+      let running = false;
+      let controller = null;
+      let currentModel = '';
+      let sessionId = null;
+      let chatHistory = [];
+      let mathjaxLoading = false;
+      let mathjaxPromise = null;
 
-      const label = document.createElement('div');
-      label.textContent = 'History';
+      const fileInput = document.getElementById('file-input');
+      const attachmentsDiv = document.getElementById('attachments');
+      const pendingFiles = []; // { file, id }
 
-      const clearBtn = document.createElement('button');
-      clearBtn.className = 'history-clear';
-      clearBtn.type = 'button';
-      clearBtn.textContent = '❌ Delete all';
-      clearBtn.title = 'Delete all chats';
-      clearBtn.setAttribute('aria-label', 'Delete all chats');
-      clearBtn.addEventListener('click', () => {
-        if (!confirm('Delete ALL chats permanently?')) return;
-
-        // remove all saved sessions
-        const keysToDelete = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && k.startsWith('lmstudio_session_')) keysToDelete.push(k);
-        }
-        keysToDelete.forEach(k => localStorage.removeItem(k));
-
-        // clear current selection + UI
-        localStorage.removeItem('lmstudio_session_id');
-        if (typeof sessionId !== 'undefined') sessionId = null;
-        if (typeof chatHistory !== 'undefined') chatHistory = [];
-        const threadEl = document.getElementById('thread');
-        if (threadEl) threadEl.innerHTML = '';
-        const titleEl = document.getElementById('title');
-        if (titleEl) titleEl.textContent = 'Untitled Chat';
-
-        // refresh the list
-        if (typeof loadChatHistory === 'function') {
-          loadChatHistory();          // rebuilds chatHistory, then calls renderChatHistory
-        } else {
-          renderChatHistory();        // fallback if you call this directly
-        }
+      fileInput.addEventListener('change', () => {
+        for (const file of fileInput.files) addAttachment(file);
+        fileInput.value = ''; // allow picking the same file again later
       });
 
-      header.appendChild(label);
-      header.appendChild(clearBtn);
-      historyList.appendChild(header);
-
-      // --- existing "no chat" empty state remains the same ---
-      if (!chatHistory || chatHistory.length === 0) {
-        historyList.insertAdjacentHTML(
-          'beforeend',
-          '<div style="color:var(--muted);font-size:12px;">No chat history</div>'
-        );
-        return;
+      function addAttachment(file) {
+        const id = crypto.randomUUID();
+        pendingFiles.push({ file, id });
+        const chip = document.createElement('div');
+        chip.className = 'attach-chip';
+        chip.dataset.id = id;
+        chip.textContent = `${file.name} (${Math.ceil(file.size / 1024)} KB)`;
+        const x = document.createElement('button');
+        x.textContent = '✕';
+        x.title = 'Remove';
+        x.onclick = () => {
+          const ix = pendingFiles.findIndex(p => p.id === id);
+          if (ix !== -1) pendingFiles.splice(ix, 1);
+          chip.remove();
+        };
+        chip.appendChild(x);
+        attachmentsDiv.appendChild(chip);
       }
-      if (chatHistory.length === 0) {
-        historyList.innerHTML = '<div style="color:var(--muted);font-size:12px;">No chat history</div>';
-        return;
-      }
 
-      chatHistory.forEach(session => {
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        if (sessionId === session.id) item.classList.add('active');
-
-        // --- title (click to load) ---
-        const title = document.createElement('div');
-        title.className = 'history-title';
-        title.textContent = session.title || 'Untitled Chat';
-        title.title = session.title || 'Untitled Chat';
-        title.addEventListener('click', () => loadSession(session.id));
-
-        // --- delete button (❌) ---
-        const del = document.createElement('button');
-        del.className = 'history-del';
-        del.type = 'button';
-        del.textContent = '❌';        // Unicode red X
-        del.title = 'Delete this chat';
-        del.setAttribute('aria-label', 'Delete this chat');
-        del.addEventListener('click', (e) => {
-          e.stopPropagation();         // don’t trigger load
-          const ok = confirm('Delete this chat permanently?');
-          if (!ok) return;
-
-          // Remove from storage
-          localStorage.removeItem(`lmstudio_session_${session.id}`);
-
-          // If deleting the current session, clear the view and reset sessionId
-          if (sessionId === session.id) {
-            sessionId = null;
-            localStorage.removeItem('lmstudio_session_id');
-            document.getElementById('thread').innerHTML = '';
-            document.getElementById('title').textContent = 'Untitled Chat';
+      async function readTextAttachments(files) {
+        const textParts = [];
+        const longestRun = (s, ch) => {
+          let best = 0, cur = 0;
+          for (const c of s) {
+            if (c === ch) { cur++; best = Math.max(best, cur); }
+            else cur = 0;
           }
+          return best;
+        };
+        for (const { file } of files) {
+          if (/^text\/|application\/(json|xml|.*markdown)/i.test(file.type)) {
+            // Guardrails: read only the first maxChars to avoid loading the entire file
+            const maxChars = 400_000; // tune to your context window
+            const head = await file.slice(0, maxChars).text();
+            const truncated = file.size > maxChars;
+            const body = truncated ? head + "\n…[truncated]" : head;
+            const maxTicks = Math.max(3, longestRun(body, '`') + 1);
+            const fence = '`'.repeat(maxTicks);
+            textParts.push(`\n\n[Attachment: ${file.name} (${body.length})]\n${fence}\n${body}\n${fence}\n`);
+          }
+        }
+        return textParts.join('');
+      }
 
-          // Refresh the list
-          loadChatHistory();
+
+
+      // --- Shadow buffer for double-buffered MathJax rendering ---
+      let shadowBuf = null, shadowBusy = false, shadowQueued = false;
+      function ensureShadow() {
+        if (shadowBuf) return shadowBuf;
+        shadowBuf = document.createElement('div');
+        shadowBuf.style.position = 'absolute';
+        shadowBuf.style.left = '-99999px';
+        shadowBuf.style.top = '0';
+        shadowBuf.className = 'bubble markdown';
+        document.body.appendChild(shadowBuf);
+        return shadowBuf;
+      }
+
+      // Generate unique session ID
+      function generateSessionId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+      }
+
+
+
+      // Load all chat sessions from localStorage
+      function loadChatHistory() {
+        chatHistory = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('lmstudio_session_') && key !== 'lmstudio_session_id') {
+            try {
+              const data = JSON.parse(localStorage.getItem(key));
+              if (data && data.title) {
+                chatHistory.push({
+                  id: key.replace('lmstudio_session_', ''),
+                  title: data.title,
+                  timestamp: data.timestamp || new Date().toISOString()
+                });
+              }
+            } catch (e) {
+              console.error('Failed to parse session:', key, e);
+            }
+          }
+        }
+        chatHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        renderChatHistory();
+      }
+
+      // Render chat history panel
+      function renderChatHistory() {
+        historyList.innerHTML = '';
+
+
+        // --- header with "Delete all" ---
+        const header = document.createElement('div');
+        header.className = 'history-header';
+
+        const label = document.createElement('div');
+        label.textContent = 'History';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'history-clear';
+        clearBtn.type = 'button';
+        clearBtn.textContent = '❌ Delete all';
+        clearBtn.title = 'Delete all chats';
+        clearBtn.setAttribute('aria-label', 'Delete all chats');
+        clearBtn.addEventListener('click', () => {
+          if (!confirm('Delete ALL chats permanently?')) return;
+
+          // remove all saved sessions
+          const keysToDelete = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('lmstudio_session_')) keysToDelete.push(k);
+          }
+          keysToDelete.forEach(k => localStorage.removeItem(k));
+
+          // clear current selection + UI
+          localStorage.removeItem('lmstudio_session_id');
+          if (typeof sessionId !== 'undefined') sessionId = null;
+          if (typeof chatHistory !== 'undefined') chatHistory = [];
+          const threadEl = document.getElementById('thread');
+          if (threadEl) threadEl.innerHTML = '';
+          const titleEl = document.getElementById('title');
+          if (titleEl) titleEl.textContent = 'Untitled Chat';
+
+          // refresh the list
+          if (typeof loadChatHistory === 'function') {
+            loadChatHistory();          // rebuilds chatHistory, then calls renderChatHistory
+          } else {
+            renderChatHistory();        // fallback if you call this directly
+          }
         });
 
-        item.appendChild(title);
-        item.appendChild(del);
-        historyList.appendChild(item);
-      });
-    }
+        header.appendChild(label);
+        header.appendChild(clearBtn);
+        historyList.appendChild(header);
 
-
-    // Toggle history panel
-    historyBtn.addEventListener('click', () => {
-      historyPanel.style.display = historyPanel.style.display === 'block' ? 'none' : 'block';
-      if (historyPanel.style.display === 'block') {
-        loadChatHistory();
-      }
-    });
-
-    // Close history panel when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!historyPanel.contains(e.target) &&
-        e.target !== historyBtn &&
-        historyPanel.style.display === 'block') {
-        historyPanel.style.display = 'none';
-      }
-    });
-
-    // Load specific session
-    async function loadSession(sessionIdToLoad) {
-      if (running) {
-        alert('Please stop the current generation before loading a session');
-        return;
-      }
-
-      const savedData = localStorage.getItem(`lmstudio_session_${sessionIdToLoad}`);
-      if (savedData) {
-        try {
-          const data = JSON.parse(savedData);
-          messages = data.messages || [];
-          titleEl.textContent = data.title || 'Untitled Chat';
-          if (data.systemPrompt) sysEl.value = data.systemPrompt;
-          if (data.model) modelSelect.value = data.model;
-          sessionId = sessionIdToLoad;
-          localStorage.setItem('lmstudio_session_id', sessionId);
-          await renderMessages();
-          historyPanel.style.display = 'none';
-          setStamp();
-          loadChatHistory();
-        } catch (e) {
-          console.error('Failed to load session:', e);
-          alert('Failed to load chat session');
+        // --- existing "no chat" empty state remains the same ---
+        if (!chatHistory || chatHistory.length === 0) {
+          historyList.insertAdjacentHTML(
+            'beforeend',
+            '<div style="color:var(--muted);font-size:12px;">No chat history</div>'
+          );
+          return;
         }
-      }
-    }
+        if (chatHistory.length === 0) {
+          historyList.innerHTML = '<div style="color:var(--muted);font-size:12px;">No chat history</div>';
+          return;
+        }
 
-    // Load current session from localStorage
-    async function loadCurrentSession() {
-      const savedSessionId = localStorage.getItem('lmstudio_session_id');
-      if (savedSessionId) {
-        const savedData = localStorage.getItem(`lmstudio_session_${savedSessionId}`);
+        chatHistory.forEach(session => {
+          const item = document.createElement('div');
+          item.className = 'history-item';
+          if (sessionId === session.id) item.classList.add('active');
+
+          // --- title (click to load) ---
+          const title = document.createElement('div');
+          title.className = 'history-title';
+          title.textContent = session.title || 'Untitled Chat';
+          title.title = session.title || 'Untitled Chat';
+          title.addEventListener('click', () => loadSession(session.id));
+
+          // --- delete button (❌) ---
+          const del = document.createElement('button');
+          del.className = 'history-del';
+          del.type = 'button';
+          del.textContent = '❌';        // Unicode red X
+          del.title = 'Delete this chat';
+          del.setAttribute('aria-label', 'Delete this chat');
+          del.addEventListener('click', (e) => {
+            e.stopPropagation();         // don’t trigger load
+            const ok = confirm('Delete this chat permanently?');
+            if (!ok) return;
+
+            // Remove from storage
+            localStorage.removeItem(`lmstudio_session_${session.id}`);
+
+            // If deleting the current session, clear the view and reset sessionId
+            if (sessionId === session.id) {
+              sessionId = null;
+              localStorage.removeItem('lmstudio_session_id');
+              document.getElementById('thread').innerHTML = '';
+              document.getElementById('title').textContent = 'Untitled Chat';
+            }
+
+            // Refresh the list
+            loadChatHistory();
+          });
+
+          item.appendChild(title);
+          item.appendChild(del);
+          historyList.appendChild(item);
+        });
+      }
+
+
+      // Toggle history panel
+      historyBtn.addEventListener('click', () => {
+        historyPanel.style.display = historyPanel.style.display === 'block' ? 'none' : 'block';
+        if (historyPanel.style.display === 'block') {
+          loadChatHistory();
+        }
+      });
+
+      // Close history panel when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!historyPanel.contains(e.target) &&
+          e.target !== historyBtn &&
+          historyPanel.style.display === 'block') {
+          historyPanel.style.display = 'none';
+        }
+      });
+
+      // Load specific session
+      async function loadSession(sessionIdToLoad) {
+        if (running) {
+          alert('Please stop the current generation before loading a session');
+          return;
+        }
+
+        const savedData = localStorage.getItem(`lmstudio_session_${sessionIdToLoad}`);
         if (savedData) {
           try {
             const data = JSON.parse(savedData);
             messages = data.messages || [];
             titleEl.textContent = data.title || 'Untitled Chat';
-            if (data.systemPrompt) sysEl.value = data.systemPrompt;
+
             if (data.model) modelSelect.value = data.model;
-            sessionId = savedSessionId;
+            sessionId = sessionIdToLoad;
+            localStorage.setItem('lmstudio_session_id', sessionId);
             await renderMessages();
-            return;
+            historyPanel.style.display = 'none';
+            setStamp();
+            loadChatHistory();
           } catch (e) {
             console.error('Failed to load session:', e);
+            alert('Failed to load chat session');
           }
         }
       }
 
-      // Create new session if none exists
-      sessionId = generateSessionId();
-      localStorage.setItem('lmstudio_session_id', sessionId);
-      saveSession();
-    }
+      // Load current session from localStorage
+      async function loadCurrentSession() {
+        const savedSessionId = localStorage.getItem('lmstudio_session_id');
+        if (savedSessionId) {
+          const savedData = localStorage.getItem(`lmstudio_session_${savedSessionId}`);
+          if (savedData) {
+            try {
+              const data = JSON.parse(savedData);
+              messages = data.messages || [];
+              titleEl.textContent = data.title || 'Untitled Chat';
 
-    // Save session to localStorage
-    function saveSession() {
-      if (!sessionId) return;
-
-      const data = {
-        messages: messages,
-        title: titleEl.textContent,
-        systemPrompt: sysEl.value,
-        model: modelSelect.value,
-        timestamp: new Date().toISOString()
-      };
-
-      localStorage.setItem(`lmstudio_session_${sessionId}`, JSON.stringify(data));
-      loadChatHistory(); // Refresh history
-    }
-
-    // Utility: append message to DOM
-    function addMessage(role, content, modelInfo = null) {
-      const wrap = document.createElement('article');
-      wrap.className = `msg ${role}`;
-      const roleEl = document.createElement('div'); roleEl.className = 'role'; roleEl.textContent = role;
-      const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = content || '';
-      wrap.appendChild(roleEl); wrap.appendChild(bubble);
-
-      // Add model info for assistant messages
-      if (role === 'assistant' && modelInfo) {
-        const modelTag = document.createElement('div');
-        modelTag.className = 'model-tag';
-        modelTag.textContent = `Model: ${modelInfo}`;
-        wrap.appendChild(modelTag);
-      }
-
-      threadEl.appendChild(wrap);
-      return bubble; // return content node for streaming updates
-    }
-
-    // Render all messages with MathJax processing
-    async function renderMessages() {
-      threadEl.innerHTML = '';
-      const mathElements = [];
-
-      for (const msg of messages) {
-        const bubble = addMessage(msg.role, msg.content, msg.model || currentModel || modelSelect.value);
-        bubble.innerHTML = renderMarkdown(msg.content);
-        bubble.classList.add('markdown');
-        addCopyButtons(bubble);
-        if (containsMath(msg.content)) {
-          mathElements.push(bubble);
-        }
-        if (msg.stats) {
-          const { tokens, timeSec, tps, endTime } = msg.stats;
-          const existing = bubble.querySelector('.stats-line');
-          if (existing) existing.remove();
-          bubble.insertAdjacentHTML(
-            'beforeend',
-            `<div class="stats-line" style="font-size:12px;color:var(--muted)">
-                Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps ? tps.toFixed(2) : ''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
-               </div>`
-          );
-        }
-
-      }
-
-      if (mathElements.length > 0) {
-        await processMathElements(mathElements);
-      }
-    }
-
-    // Check if content contains math expressions
-    function containsMath(content) {
-      if ((/(^|[^$])\$(?!\$)[\s\S]*?(?<!\$)\$(?!\$)/).test(content)) return true; // inline $...$
-      return content.includes('$$') || content.includes('\\(') || content.includes('\\)') || content.includes('\\[') || content.includes('\\]');
-    }
-
-    // Process MathJax for multiple elements
-    async function processMathElements(elements) {
-      if (elements.length === 0) return;
-      if (!window.MathJax) {
-        try { await ensureMathJax(); } catch (e) { console.warn('MathJax failed to load:', e); return; }
-      }
-      try { await MathJax.typesetPromise(elements); } catch (e) { console.warn('MathJax typesetting warning:', e); }
-    }
-
-    function isNearBottom() {
-      return window.innerHeight + window.scrollY >= document.body.scrollHeight - 100;
-    }
-    function scrollToBottomIfNeeded() {
-      if (isNearBottom()) window.scrollTo({ top: document.body.scrollHeight });
-    }
-
-    function setStamp() {
-      const d = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      stampEl.textContent = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      const modelForPrint = currentModel || (modelSelect.value || 'lmstudio');
-      printHeader.textContent = `Transcript — ${titleEl.textContent} — Model: ${modelForPrint} — printed ${stampEl.textContent}`;
-    }
-
-    // Export as Markdown
-    function exportMarkdown() {
-      const lines = [];
-      const modelForPrint = currentModel || (modelSelect.value || 'lmstudio');
-      lines.push(`# Transcript — ${titleEl.textContent}`);
-      lines.push("");
-      lines.push(`Model: ${modelForPrint}`);
-      lines.push(`Printed: ${stampEl.textContent}`);
-      lines.push("");
-      for (const m of messages) {
-        lines.push(`### ${m.role.toUpperCase()}`);
-        lines.push('');
-        lines.push(m.content);
-        lines.push('');
-      }
-      const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = (titleEl.textContent || 'chat') + '.md';
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
-
-    // Fetch models for convenience (LM Studio exposes OpenAI-compatible /v1/models)
-    async function refreshModels(keepCurrent = true) {
-      const currentValue = modelSelect.value;
-      modelSelect.innerHTML = '<option value="">Loading models...</option>';
-
-      try {
-        const res = await fetch(apiBaseEl.value.replace(/\/$/, '') + '/models');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        const models = data.data || [];
-
-        modelSelect.innerHTML = '';
-        if (models.length === 0) {
-          modelSelect.innerHTML = '<option value="">No models found</option>';
-          return;
-        }
-
-        models.forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m.id;
-          // Show model type if available (e.g., text-generation, embedding)
-          let type = '';
-          if (m.type) {
-            type = ` (${m.type})`;
-          } else if (m.embedding_only || m.id.toLowerCase().includes('embed')) {
-            type = ' (embedding)';
+              if (data.model) modelSelect.value = data.model;
+              sessionId = savedSessionId;
+              await renderMessages();
+              return;
+            } catch (e) {
+              console.error('Failed to load session:', e);
+            }
           }
-          opt.textContent = m.id + type;
-          // Disable embedding-only models for chat
-          if (type.includes('(embedding)') || m.type === 'embedding' || m.embedding_only) {
-            opt.disabled = true;
-            //opt.textContent += ' [embedding only]';
-          }
-          modelSelect.appendChild(opt);
-        });
-
-        if (keepCurrent && currentValue && models.some(m => m.id === currentValue)) {
-          modelSelect.value = currentValue;
-        } else if (!modelSelect.value && models.length > 0) {
-          // Pick first non-embedding model if possible
-          const firstTextModel = models.find(m => m.type !== 'embedding' && !m.embedding_only);
-          modelSelect.value = firstTextModel ? firstTextModel.id : models[0].id;
         }
 
-        updateModelBadge(modelSelect.value);
-      } catch (e) {
-        console.warn('Model list failed:', e);
-        modelSelect.innerHTML = '<option value="">Failed to load models</option>';
+        // Create new session if none exists
+        sessionId = generateSessionId();
+        localStorage.setItem('lmstudio_session_id', sessionId);
+        saveSession();
       }
-    }
 
-    // --- Connection & model status ---
-    function updateModelBadge(model) {
-      currentModel = model || '';
-      if (modelBadge) modelBadge.textContent = 'model: ' + (currentModel || '—');
-      setStamp();
-    }
-    function setStatus(mode, text) {
-      if (!statusEl) return;
-      const dot = statusEl.querySelector('.dot');
-      const t = statusEl.querySelector('.statustext');
-      dot.classList.remove('online', 'offline', 'busy');
-      dot.classList.add(mode);
-      t.textContent = text;
-    }
-    async function checkConnection() {
-      const url = apiBaseEl.value.replace(/\/$/, '') + '/models';
-      const ac = new AbortController();
-      const to = setTimeout(() => ac.abort(), 3500);
-      try {
-        const res = await fetch(url, { signal: ac.signal });
-        clearTimeout(to);
-        setStatus(res.ok ? 'online' : 'offline', res.ok ? 'Connected' : 'Offline');
-      } catch {
-        setStatus('offline', 'Offline');
+      // Save session to localStorage
+      function saveSession() {
+        if (!sessionId) return;
+
+        const data = {
+          messages: messages,
+          title: titleEl.textContent,
+          model: modelSelect.value,
+          timestamp: new Date().toISOString()
+        };
+
+        localStorage.setItem(`lmstudio_session_${sessionId}`, JSON.stringify(data));
+        loadChatHistory(); // Refresh history
       }
-    }
 
-    // --- Markdown + LaTeX (MathJax) ---
-    function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+      // Utility: append message to DOM
+      function addMessage(role, content, modelInfo = null) {
+        const wrap = document.createElement('article');
+        wrap.className = `msg ${role}`;
+        const roleEl = document.createElement('div'); roleEl.className = 'role'; roleEl.textContent = role;
+        const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = content || '';
+        wrap.appendChild(roleEl); wrap.appendChild(bubble);
 
-    function addCopyButtons(container) {
-      container.querySelectorAll('pre').forEach(pre => {
-        // avoid duplicates if re-rendered
-        if (pre.querySelector('.copy-btn')) return;
+        // Add model info for assistant messages
+        if (role === 'assistant' && modelInfo) {
+          const modelTag = document.createElement('div');
+          modelTag.className = 'model-tag';
+          modelTag.textContent = `Model: ${modelInfo}`;
+          wrap.appendChild(modelTag);
+        }
 
-        const btn = document.createElement('button');
-        btn.className = 'copy-btn';
-        btn.textContent = '📋';
-        btn.addEventListener('click', () => {
-          const code = pre.querySelector('code').textContent; // preserves visible formatting
-          navigator.clipboard.writeText(code).then(() => {
-            btn.textContent = 'Copied!';
-            setTimeout(() => btn.textContent = '📋', 1500);
-          }).catch(err => {
-            console.error('Copy failed', err);
-            btn.textContent = 'Error';
-            setTimeout(() => btn.textContent = '📋', 1500);
+        threadEl.appendChild(wrap);
+        return bubble; // return content node for streaming updates
+      }
+
+      // Render all messages with MathJax processing
+      async function renderMessages() {
+        threadEl.innerHTML = '';
+        const mathElements = [];
+
+        for (const msg of messages) {
+          const bubble = addMessage(msg.role, msg.content, msg.model || currentModel || modelSelect.value);
+          bubble.innerHTML = renderMarkdown(msg.content);
+          bubble.classList.add('markdown');
+          addCopyButtons(bubble);
+          if (containsMath(msg.content)) {
+            mathElements.push(bubble);
+          }
+          if (msg.stats) {
+            const { tokens, timeSec, tps, endTime } = msg.stats;
+            const existing = bubble.querySelector('.stats-line');
+            if (existing) existing.remove();
+            bubble.insertAdjacentHTML(
+              'beforeend',
+              `<div class="stats-line" style="font-size:12px;color:var(--muted)">
+                                                          Tokens: ${tokens} | Time: ${timeSec.toFixed(2)}s | ${tps ? tps.toFixed(2) : ''} tokens/sec | Date: ${new Date(endTime).toLocaleString()}
+                                                         </div>`
+            );
+          }
+
+        }
+
+        if (mathElements.length > 0) {
+          await processMathElements(mathElements);
+        }
+      }
+
+      // Check if content contains math expressions
+      function containsMath(content) {
+        if ((/(^|[^$])\$(?!\$)[\s\S]*?(?<!\$)\$(?!\$)/).test(content)) return true; // inline $...$
+        return content.includes('$$') || content.includes('\\(') || content.includes('\\)') || content.includes('\\[') || content.includes('\\]');
+      }
+
+      // Process MathJax for multiple elements
+      async function processMathElements(elements) {
+        if (elements.length === 0) return;
+        if (!window.MathJax) {
+          try { await ensureMathJax(); } catch (e) { console.warn('MathJax failed to load:', e); return; }
+        }
+        try { await MathJax.typesetPromise(elements); } catch (e) { console.warn('MathJax typesetting warning:', e); }
+      }
+
+      function isNearBottom() {
+        return window.innerHeight + window.scrollY >= document.body.scrollHeight - 100;
+      }
+      function scrollToBottomIfNeeded() {
+        if (isNearBottom()) window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      }
+
+      function setStamp() {
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        stampEl.textContent = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        const modelForPrint = currentModel || (modelSelect.value || 'lmstudio');
+        printHeader.textContent = `Transcript — ${titleEl.textContent} — Model: ${modelForPrint} — printed ${stampEl.textContent}`;
+      }
+
+      // Export as Markdown
+      function exportMarkdown() {
+        const lines = [];
+        const modelForPrint = currentModel || (modelSelect.value || 'lmstudio');
+        lines.push(`# Transcript — ${titleEl.textContent}`);
+        lines.push("");
+        lines.push(`Model: ${modelForPrint}`);
+        lines.push(`Printed: ${stampEl.textContent}`);
+        lines.push("");
+        for (const m of messages) {
+          lines.push(`### ${m.role.toUpperCase()}`);
+          lines.push('');
+          lines.push(m.content);
+          lines.push('');
+        }
+        const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (titleEl.textContent || 'chat') + '.md';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      // Fetch models for convenience (LM Studio exposes OpenAI-compatible /v1/models)
+      async function refreshModels(keepCurrent = true) {
+        const currentValue = modelSelect.value;
+        modelSelect.innerHTML = '<option value="">Loading models...</option>';
+
+        try {
+          const res = await fetch(activeModelsURL());
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          const models = data.data || [];
+
+          modelSelect.innerHTML = '';
+          if (models.length === 0) {
+            modelSelect.innerHTML = '<option value="">No models found</option>';
+            return;
+          }
+
+          models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            // Show model type if available (e.g., text-generation, embedding)
+            let type = '';
+            if (m.type) {
+              type = ` (${m.type})`;
+            } else if (m.embedding_only || m.id.toLowerCase().includes('embed')) {
+              type = ' (embedding)';
+            }
+            opt.textContent = m.id + type;
+            // Disable embedding-only models for chat
+            if (type.includes('(embedding)') || m.type === 'embedding' || m.embedding_only) {
+              opt.disabled = true;
+              //opt.textContent += ' [embedding only]';
+            }
+            modelSelect.appendChild(opt);
           });
+
+          if (keepCurrent && currentValue && models.some(m => m.id === currentValue)) {
+            modelSelect.value = currentValue;
+          } else if (!modelSelect.value && models.length > 0) {
+            // Pick first non-embedding model if possible
+            const firstTextModel = models.find(m => m.type !== 'embedding' && !m.embedding_only);
+            modelSelect.value = firstTextModel ? firstTextModel.id : models[0].id;
+          }
+
+          updateModelBadge(modelSelect.value);
+        } catch (e) {
+          console.warn('Model list failed:', e);
+          modelSelect.innerHTML = '<option value="">Failed to load models</option>';
+        }
+      }
+
+      // --- Connection & model status ---
+      function updateModelBadge(model) {
+        currentModel = model || '';
+        if (modelBadge) modelBadge.textContent = 'model: ' + (currentModel || '—');
+        setStamp();
+      }
+      function setStatus(mode, text) {
+        if (!statusEl) return;
+        const dot = statusEl.querySelector('.dot');
+        const t = statusEl.querySelector('.statustext');
+        dot.classList.remove('online', 'offline', 'busy');
+        dot.classList.add(mode);
+        t.textContent = text;
+      }
+      async function checkConnection() {
+        const url = activeModelsURL();
+        const ac = new AbortController();
+        const to = setTimeout(() => ac.abort(), 3500);
+        try {
+          const res = await fetch(url, { signal: ac.signal });
+          clearTimeout(to);
+          setStatus(res.ok ? 'online' : 'offline', res.ok ? 'Connected' : 'Offline');
+        } catch {
+          setStatus('offline', 'Offline');
+        }
+      }
+
+      // --- Markdown + LaTeX (MathJax) ---
+      function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+      function addCopyButtons(container) {
+        container.querySelectorAll('pre').forEach(pre => {
+          // avoid duplicates if re-rendered
+          if (pre.querySelector('.copy-btn')) return;
+
+          const btn = document.createElement('button');
+          btn.className = 'copy-btn';
+          btn.textContent = '📋';
+          btn.addEventListener('click', () => {
+            const code = pre.querySelector('code').textContent; // preserves visible formatting
+            navigator.clipboard.writeText(code).then(() => {
+              btn.textContent = 'Copied!';
+              setTimeout(() => btn.textContent = '📋', 1500);
+            }).catch(err => {
+              console.error('Copy failed', err);
+              btn.textContent = 'Error';
+              setTimeout(() => btn.textContent = '📋', 1500);
+            });
+          });
+
+          pre.appendChild(btn);
         });
-
-        pre.appendChild(btn);
-      });
-    }
-
-    
+      }
 
 
-    function renderMarkdown(src) {
+
+
+      function renderMarkdown(src) {
         if (!src || typeof src !== 'string') return '';
 
         let s = '\n' + (src || '').replace(/\r/g, '');
@@ -1592,6 +1706,27 @@
           stash.push(html);
           return STUB(stash.length - 1);
         };
+
+        // --- handle <think>...</think> blocks ---
+        // Closed (paired) think → keep it OPEN so it's visible
+        s = s.replace(/<think\b[^>]*>([\s\S]*?)<\/think>/gi, (_m, inner) => {
+          const esc = inner.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+          return push(
+            `<details class="llm-think" open><summary>Reasoning</summary><pre><code>${esc}</code></pre></details>`
+          );
+        });
+
+
+        // Streaming (unclosed) think → keep it OPEN so user can see it live
+        s = s.replace(/<think\b[^>]*>(?![\s\S]*<\/think>)([\s\S]*)$/i, (_m, inner) => {
+          const esc = inner.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+          return push(
+            `<details class="llm-think" open><summary>Reasoning</summary><pre><code>${esc}</code></pre></details>`
+          );
+        });
+
+
+
 
 
         const fenced = /(^|\n)(?<fence>```+|~~~+)[ \t]*([^\r\n]*)\r?\n([\s\S]*?)\n\k<fence>[ \t]*(?=\r?\n|$)/g;
@@ -1670,7 +1805,14 @@
         s = s.replace(/(?:^|\n)([^\n]+)\n[ \t]*={2,}[ \t]*(?=\n|$)/g, (_m, t) => `\n<h1>${t.trim()}</h1>`);
 
         // Setext H2: text + line of ---
-        s = s.replace(/(?:^|\n)([^\n]+)\n[ \t]*-{2,}[ \t]*(?=\n|$)/g, (_m, t) => `\n<h2>${t.trim()}</h2>`);
+        s = s.replace(
+          /(?:^|\n)([^\n]+)\n[ \t]*-{2,}[ \t]*(?=\n|$)/g,
+          (_m, t) => {
+            // If the candidate "title" line looks like code or contains long dash runs, don't heading-ify it
+            if (/[`@{}()=]/.test(t) || /-{4,}/.test(t)) return `\n${t}\n` + '---';
+            return `\n<h2>${t.trim()}</h2>`;
+          }
+        );
 
 
 
@@ -1761,473 +1903,848 @@
 
         // Unwrap tables from accidental <p>…</p>
         s = s.replace(/<p>\s*(<table\b[\s\S]*?<\/table>)\s*<\/p>/g, '$1');
-        // Unwrap lists and blockquotes accidentally placed inside <p>…</p>
+        // Unwrap standalone <details> accidentally placed inside <p>…</p>
+        s = s.replace(/<p>\s*(<details\b[\s\S]*?<\/details>)\s*<\/p>/g, '$1');
+
+        // Replace your current unwrapRE with this version (adds |details)
         const unwrapRE = new RegExp(
-          '<p>\\s*((?:<(?:table|ul|ol|blockquote)\\b[\\s\\S]*?<\\/(?:table|ul|ol|blockquote)>))\\s*<\\/p>',
+          '<p>\\s*((?:<(?:table|ul|ol|blockquote|details)\\b[\\s\\S]*?<\\/(?:table|ul|ol|blockquote|details)>))\\s*<\\/p>',
           'g'
         );
         s = s.replace(unwrapRE, '$1');
-
-
-
 
         return '<p>' + s.trim() + '</p>';
       }
 
 
 
-    let mathjaxLoad = null; // shared single-flight promise
+      let mathjaxLoad = null; // shared single-flight promise
 
-    function ensureMathJax() {
-      // Already fully initialized?
-      if (window.MathJax?.startup?.promise) return window.MathJax.startup.promise;
+      function ensureMathJax() {
+        // Already fully initialized?
+        if (window.MathJax?.startup?.promise) return window.MathJax.startup.promise;
 
-      // A load is already in-flight (or completed): reuse it.
-      if (mathjaxLoad) return mathjaxLoad;
+        // A load is already in-flight (or completed): reuse it.
+        if (mathjaxLoad) return mathjaxLoad;
 
-      // Configure before loading; merge with any preexisting config.
-      window.MathJax = {
-        ...window.MathJax,
-        tex: {
-          inlineMath: [['$', '$'], ['\\(', '\\)']],
-          displayMath: [['$$', '$$'], ['\\[', '\\]']],
-          processEscapes: true,
-          ...(window.MathJax?.tex || {})
-        },
-        options: {
-          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
-          ...(window.MathJax?.options || {})
-        },
-        startup: { typeset: false, ...(window.MathJax?.startup || {}) }
-      };
-
-      mathjaxLoad = new Promise((resolve, reject) => {
-        const finish = () => {
-          const ready = window.MathJax?.startup?.promise || Promise.resolve();
-          ready.then(resolve, (e) => { mathjaxLoad = null; reject(e); });
+        // Configure before loading; merge with any preexisting config.
+        window.MathJax = {
+          ...window.MathJax,
+          tex: {
+            inlineMath: [['$', '$'], ['\\(', '\\)']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            processEscapes: true,
+            ...(window.MathJax?.tex || {})
+          },
+          options: {
+            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            ...(window.MathJax?.options || {})
+          },
+          startup: { typeset: false, ...(window.MathJax?.startup || {}) }
         };
-        const fail = () => { mathjaxLoad = null; reject(new Error('Failed to load MathJax')); };
 
-        let s = document.getElementById('mathjax-script');
-        if (s) {
-          // If script exists, hook its events or finish if already ready.
-          if (window.MathJax?.startup?.promise) finish();
-          else {
-            s.addEventListener('load', finish, { once: true });
-            s.addEventListener('error', fail, { once: true });
+        mathjaxLoad = new Promise((resolve, reject) => {
+          const finish = () => {
+            const ready = window.MathJax?.startup?.promise || Promise.resolve();
+            ready.then(resolve, (e) => { mathjaxLoad = null; reject(e); });
+          };
+          const fail = () => { mathjaxLoad = null; reject(new Error('Failed to load MathJax')); };
+
+          let s = document.getElementById('mathjax-script');
+          if (s) {
+            // If script exists, hook its events or finish if already ready.
+            if (window.MathJax?.startup?.promise) finish();
+            else {
+              s.addEventListener('load', finish, { once: true });
+              s.addEventListener('error', fail, { once: true });
+            }
+            return;
           }
-          return;
-        }
 
-        s = document.createElement('script');
-        s.id = 'mathjax-script';
-        s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
-        s.async = true;
-        s.addEventListener('load', finish, { once: true });
-        s.addEventListener('error', fail, { once: true });
-        document.head.appendChild(s);
-      });
+          s = document.createElement('script');
+          s.id = 'mathjax-script';
+          s.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+          s.async = true;
+          s.addEventListener('load', finish, { once: true });
+          s.addEventListener('error', fail, { once: true });
+          document.head.appendChild(s);
+        });
 
-      return mathjaxLoad;
-    }
+        return mathjaxLoad;
+      }
 
-    // Example:
-    // await ensureMathJax();
-    // await MathJax.typesetPromise([document.body]); // or a specific container
+      // Example:
+      // await ensureMathJax();
+      // await MathJax.typesetPromise([document.body]); // or a specific container
 
 
-    // Stream reader for OpenAI-compatible responses (SSE-like lines)
-    async function* streamLines(reader) {
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, idx).trim();
-          buffer = buffer.slice(idx + 1);
-          if (!line) continue;
-          if (line.startsWith('data:')) {
-            const payload = line.slice(5).trimStart();
-            yield payload;
+      // Stream reader for OpenAI-compatible responses (SSE-like lines)
+      async function* streamLines(reader) {
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, idx).trim();
+            buffer = buffer.slice(idx + 1);
+            if (!line) continue;
+            if (line.startsWith('data:')) {
+              const payload = line.slice(5).trimStart();
+              yield payload;
+            }
           }
         }
-      }
-      if (buffer.trim()) yield buffer.trim();
-    }
-
-    // Send message
-    async function send() {
-      if (running) return;
-      let userText = inputEl.value.trim();
-      if (!userText) return;
-      const extra = await readTextAttachments(pendingFiles);
-      if (extra)
-        userText = userText + extra;
-
-      pendingFiles.length = 0;
-      attachmentsDiv.innerHTML = '';
-      let pendingModelTagEl = null;
-
-
-      setStamp();
-      running = true;
-      sendBtn.disabled = true; stopBtn.disabled = false;
-      setStatus('busy', 'Querying');
-      updateModelBadge(modelSelect.value || 'lmstudio');
-
-      if (messages.length === 0 && sysEl.value.trim()) {
-        messages.push({ role: 'system', content: sysEl.value.trim() });
-        const sysNode = addMessage('system', sysEl.value.trim());
-        sysNode.innerHTML = renderMarkdown(sysEl.value.trim());
-        sysNode.classList.add('markdown');
+        if (buffer.trim()) yield buffer.trim();
       }
 
-      messages.push({ role: 'user', content: userText });
-      const userNode = addMessage('user', userText);
-      userNode.innerHTML = renderMarkdown(userText);
-      userNode.classList.add('markdown');
-      inputEl.value = '';
-      saveSession();
-      // Check if selected model is embedding-only
-      const selectedOption = modelSelect.selectedOptions[0];
-      if (selectedOption && selectedOption.disabled) {
-        assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
-        assistantNode.innerHTML = `<span class="error">Selected model is for embedding only and cannot be used for chat.</span>`;
-        running = false;
-        sendBtn.disabled = false; stopBtn.disabled = true;
-        setStatus('offline', 'Embedding model');
-        return;
-      }
+      function makeRenderer(assistantNode) {
+        let assistantAccum = '';
+        let pendingChunk = '';
+        let scheduled = false;
+        let lastRenderTime = 0;
 
-      const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
-      // Grab the newly added assistant message wrapper and its model tag
-      const assistantWrap = threadEl.lastElementChild;
-      pendingModelTagEl = assistantWrap?.querySelector('.model-tag') || null;
-
-      // Start blinking: message tag + header badge (and show the badge while waiting)
-      if (pendingModelTagEl) pendingModelTagEl.classList.add('blink-slow');
-      if (false && modelBadge) {
-        modelBadge.style.display = 'inline-block';
-        modelBadge.classList.add('blink-slow');
-      }
-
-      // prepare request
-      const payload = {
-        model: modelSelect.value || 'lmstudio',
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-        stream: true,
-        temperature: Number(tempEl.value || 0.7),
-        max_tokens: Number(maxTEl.value || 100000)
-      };
-
-      const headers = { 'Content-Type': 'application/json' };
-      const key = apiKeyEl.value.trim();
-      if (key) headers['Authorization'] = 'Bearer ' + key;
-
-      const url = apiBaseEl.value.replace(/\/$/, '') + '/chat/completions';
-      controller = new AbortController();
-
-      let assistantAccum = '';
-      let pendingChunk = '';
-      let scheduled = false;
-      let lastRenderTime = 0;
-      let currentStreamingModel = modelSelect.value || 'lmstudio';
-
-      const flush = () => {
-        // allow future scheduling
-        scheduled = false;
-        if (!pendingChunk) return;
-
-        assistantAccum += pendingChunk;
-        pendingChunk = '';
-
-        const now = Date.now();
-        // throttle updates to let MathJax breathe
-        if (now - lastRenderTime < 30) {
+        const append = (token) => {
+          if (!token) return;
+          pendingChunk += token;
           if (!scheduled) {
             scheduled = true;
             requestAnimationFrame(flush);
           }
-          return;
-        }
-        lastRenderTime = now;
+        };
 
-        if (!(liveFmtEl && liveFmtEl.checked)) {
-          assistantNode.textContent = assistantAccum;
-          scrollToBottomIfNeeded();
-          return;
-        }
+        const flush = () => {
+          scheduled = false;
+          if (!pendingChunk) return;
 
-        // Double-buffered render: build off-screen, typeset there, then swap
-        const shadow = ensureShadow();
+          assistantAccum += pendingChunk;
+          pendingChunk = '';
 
-        // If a typeset is running, queue and bail; we'll re-run flush after it completes
-        if (shadowBusy) {
-          shadowQueued = true;
-          return;
-        }
-        shadowBusy = true;
+          const now = Date.now();
+          if (now - lastRenderTime < 30) {
+            if (!scheduled) {
+              scheduled = true;
+              requestAnimationFrame(flush);
+            }
+            return;
+          }
+          lastRenderTime = now;
 
-        shadow.innerHTML = renderMarkdown(assistantAccum);
+          if (!(liveFmtEl && liveFmtEl.checked)) {
+            assistantNode.textContent = assistantAccum;
+            scrollToBottomIfNeeded();
+            return;
+          }
 
+          const shadow = ensureShadow();
+          if (window.shadowBusy) { window.shadowQueued = true; return; }
+          window.shadowBusy = true;
 
-        const doTypeset = async () => {
+          shadow.innerHTML = renderMarkdown(assistantAccum);
+
+          (async () => {
+            try {
+              await ensureMathJax();
+              await MathJax.typesetPromise([shadow]);
+            } catch (e) {
+              console.warn('MathJax typeset (shadow) failed:', e);
+            } finally {
+              assistantNode.innerHTML = shadow.innerHTML;
+              assistantNode.classList.add('markdown');
+              scrollToBottomIfNeeded();
+              window.shadowBusy = false;
+              if (window.shadowQueued) {
+                window.shadowQueued = false;
+                scheduled = true;
+                requestAnimationFrame(flush);
+              }
+            }
+          })();
+        };
+
+        const finalize = async () => {
+          if (pendingChunk) {
+            assistantAccum += pendingChunk;
+            pendingChunk = '';
+          }
+          const shadow = ensureShadow();
+          shadow.innerHTML = renderMarkdown(assistantAccum);
           try {
             await ensureMathJax();
             await MathJax.typesetPromise([shadow]);
           } catch (e) {
-            console.warn('MathJax typeset (shadow) failed:', e);
-          } finally {
-            // Atomic swap
-            assistantNode.innerHTML = shadow.innerHTML;
-            assistantNode.classList.add('markdown');
-            scrollToBottomIfNeeded();
-            shadowBusy = false;
-
-            if (shadowQueued) {
-              shadowQueued = false;
-              scheduled = true;
-              requestAnimationFrame(flush);
-            }
+            console.warn('Final MathJax typeset failed:', e);
           }
+          assistantNode.innerHTML = shadow.innerHTML;
+          assistantNode.classList.add('markdown');
+          return assistantAccum;
         };
-        doTypeset();
-      };
 
-      const startTime = Date.now(); // NEW: mark start time
-      let completionTokens = 0; // NEW
-      try {
-        const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: controller.signal });
-        if (!res.ok || !res.body) {
-          let msg = `HTTP ${res.status}`;
-          try {
-            const text = await res.text();
-            const j = JSON.parse(text);
-            if (j?.error?.message) msg += ` — ${j.error.message}`;
-            else if (text) msg += ` — ${text}`;
-          } catch { /* ignore parse failure */ }
-          assistantNode.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
-          throw new Error(msg);
+        return { append, flush, finalize, get text() { return assistantAccum; } };
+      }
+
+      function gatherUserInput() {
+        let userText = inputEl.value.trim();
+        if (!userText) return null;
+
+        // Thresholds you can adjust easily
+        const MIN_LINES = 8;        // only wrap if at least this many lines
+        const MIN_KEYWORDS = 4;     // how many keyword matches before we say "looks like code"
+        const MIN_OPERATORS = 4;    // how many operator matches
+        const MIXED_THRESHOLD = 3;  // at least this many of each (keyword + operator) to count
+
+        const lineCount = (userText.match(/\n/g) || []).length + 1;
+
+        // Short, code-ish tokens (not common English words)
+        const kwRe = /\b(int|const|css|fn|enum|typedef|usize|u64|i32|uint)\b/gi;
+
+        // Distinctive operators
+        const opRe = /(=>|->|::=|::|:=|<-|===|!==|\?\?|\.?\?|>>>=|>>=|<<=|\+\+|--|\*\*|&&|\|\|)/g;
+
+        const kwCount = (userText.match(kwRe) || []).length;
+        const opCount = (userText.match(opRe) || []).length;
+
+        const looksLikeCode =
+          kwCount >= MIN_KEYWORDS ||
+          opCount >= MIN_OPERATORS ||
+          (kwCount >= MIXED_THRESHOLD && opCount >= MIXED_THRESHOLD);
+
+        if (!/```/.test(userText) && lineCount >= MIN_LINES && looksLikeCode) {
+          userText = "```\n" + userText + "\n```";
         }
+
+        return userText;
+      }
+
+
+
+      async function maybeAppendAttachments(text) {
+        const extra = await readTextAttachments(pendingFiles);
+        if (extra) text += extra;
+        pendingFiles.length = 0;
+        attachmentsDiv.innerHTML = '';
+        return text;
+      }
+
+      let lastSystemPrompt = null;  // keep outside the function
+
+      function ensureSystemMessage() {
+        const sys = (getActiveServer().systemPrompt ?? '').trim();
+        const idx = messages.findIndex(m => m.role === 'system');
+
+        // only act if value changed compared to last sync
+        if (sys === lastSystemPrompt) {
+          return 'nochange';
+        }
+        lastSystemPrompt = sys;
+
+        if (!sys) {
+          if (idx >= 0) {
+            messages.splice(idx, 1); // remove system message
+            return 'removed';
+          }
+          return 'nochange';
+        }
+
+        if (idx >= 0) {
+          messages[idx].content = sys;
+          if (idx !== 0) {
+            const [m] = messages.splice(idx, 1);
+            messages.unshift(m);
+          }
+          return 'updated';
+        } else {
+          messages.unshift({ role: 'system', content: sys });
+          const sysNode = addMessage('system', sys);
+          sysNode.innerHTML = renderMarkdown(sys);
+          sysNode.classList.add('markdown');
+          return 'added';
+        }
+      }
+
+
+
+      function pushUserMessage(userText) {
+        messages.push({ role: 'user', content: userText });
+        const userNode = addMessage('user', userText);
+        userNode.innerHTML = renderMarkdown(userText);
+        userNode.classList.add('markdown');
+        inputEl.value = '';
+        saveSession();
+      }
+
+      function addAssistantShell() {
+        const assistantNode = addMessage('assistant', '', modelSelect.value || 'lmstudio');
+        const assistantWrap = threadEl.lastElementChild;
+        const modelTag = assistantWrap?.querySelector('.model-tag') || null;
+        return { assistantNode, modelTag };
+      }
+
+      function startBlink(modelTag) {
+        if (modelTag) modelTag.classList.add('blink-slow');
+        // keep header badge code behind your feature flag
+        // if (modelBadge) { modelBadge.style.display='inline-block'; modelBadge.classList.add('blink-slow'); }
+      }
+
+      function stopBlink(modelTag) {
+        if (modelTag) modelTag.classList.remove('blink-slow');
+        if (modelBadge) {
+          modelBadge.classList.remove('blink-slow');
+          modelBadge.style.display = 'none';
+        }
+      }
+
+      function buildHeaders() {
+        const headers = { 'Content-Type': 'application/json' };
+        const srv = getActiveServer();
+        const key = srv.apiKey;
+        if (key) headers['Authorization'] = 'Bearer ' + key;
+        return headers;
+      }
+
+      function buildPayload() {
+        return {
+          model: modelSelect.value || 'lmstudio',
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          stream: doStreamEl.checked,
+          temperature: Number(tempEl.value || 0.7),
+          max_tokens: Number(maxTEl.value || 100000)
+        };
+      }
+
+      function selectedIsEmbeddingOnly() {
+        const opt = modelSelect.selectedOptions[0];
+        return !!(opt && opt.disabled);
+      }
+
+      function showEmbeddingOnlyError(assistantNode) {
+        assistantNode.innerHTML = `<span class="error">Selected model is for embedding only and cannot be used for chat.</span>`;
+        setStatus('offline', 'Embedding model');
+      }
+
+      function tokenEstimateSmart(text) {
+        if (!text || !text.trim()) return 0;
+        const chinese = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+        const japanese = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
+        const korean = (text.match(/[\uac00-\ud7af]/g) || []).length;
+        const special = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
+        const other = text.length - chinese - japanese - korean - special;
+        return (chinese + japanese + korean) + (other > 0 ? Math.ceil(other / 4.0) : 0) + special;
+      }
+
+      function statsFooter(tokens, sec) {
+        const tps = (sec > 0 && tokens > 0) ? (tokens / sec).toFixed(2) : '—';
+        return `<div style="font-size:12px;color:var(--muted)">
+                                            Tokens: ${tokens} | Time: ${sec.toFixed(2)}s | ${tps} tokens/sec
+                                          </div>`;
+      }
+
+      async function runStreaming(res, renderer, onModel, onUsage) {
         for await (const raw of streamLines(res.body.getReader())) {
           if (raw === '[DONE]') break;
           try {
             const obj = JSON.parse(raw);
             if (obj.error) {
               const msg = obj.error.message || JSON.stringify(obj.error);
-              pendingChunk += `\n\n[ERROR] ${msg}`;
-              if (!scheduled) { scheduled = true; requestAnimationFrame(flush); }
+              renderer.append(`\n\n[ERROR] ${msg}`);
               continue;
             }
-            if (obj.usage?.completion_tokens) { // NEW
-              completionTokens = obj.usage.completion_tokens;
-            }
+            if (obj.usage?.completion_tokens) onUsage(obj.usage.completion_tokens);
+            if (obj.model) onModel(obj.model);
+
             const choice = obj.choices?.[0];
-            if (obj.model) {
-              updateModelBadge(obj.model);
-              currentStreamingModel = obj.model;
-            }
-            const delta = choice?.delta || choice; // support both chat.delta and plain text
+            const delta = choice?.delta || choice;
             const token = delta?.content || delta?.text || '';
-            if (!token) continue;
-            pendingChunk += token;
-            if (!scheduled) {
-              scheduled = true;
-              requestAnimationFrame(flush);
-            }
+            renderer.append(token);
           } catch {
-            continue; // keep-alives/comments
+            // ignore keep-alives/comments
           }
         }
-        setStatus('online', 'Connected');
-      } catch (err) {
-        if (err.name === 'AbortError') {
-          pendingChunk += '\n\n[stopped]';
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
-          }
-          setStatus('online', 'Stopped');
-        } else {
-          const em = `\n\n[error] ${err.message}`;
-          pendingChunk += em;
-          if (!scheduled) {
-            scheduled = true;
-            requestAnimationFrame(flush);
-          }
-          setStatus('offline', 'Offline');
-        }
-      } finally {
+      }
 
-        const endTime = Date.now();             // NEW: mark end time
-        const elapsedSec = (endTime - startTime) / 1000; // NEW: calc seconds
-
-        // finalize assistant message in state using the same shadow swap
-        if (pendingChunk) {
-          // ensure last chunk makes it in
-          assistantAccum += pendingChunk;
-          pendingChunk = '';
-        }
-
-        // final render via double-buffer path
-        const shadow = ensureShadow();
-        shadow.innerHTML = renderMarkdown(assistantAccum);
+      async function runNonStreaming(res) {
+        let data;
         try {
-          await ensureMathJax();
-          await MathJax.typesetPromise([shadow]);
+          data = await res.json();
         } catch (e) {
-          console.warn('Final MathJax typeset failed:', e);
+          throw new Error('Failed to parse JSON: ' + e.message);
         }
-        // NEW: count tokens from accumulated text
+        if (data.error) throw new Error(data.error.message || 'Orchestrator error');
 
-        function smartTokenEstimate(text) {
-          if (!text || text.trim().length === 0) return 0;
+        const modelId = data.model || data.system_fingerprint || (modelSelect.value || 'lmstudio');
+        const choice0 = data.choices?.[0] || {};
+        const content = choice0.message?.content ?? choice0.text ?? '';
+        return {
+          content,
+          modelId,
+          completionTokens: data.usage?.completion_tokens || 0
+        };
+      }
 
-          // Count different types of characters
-          const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-          const japaneseChars = (text.match(/[\u3040-\u309f\u30a0-\u30ff]/g) || []).length;
-          const koreanChars = (text.match(/[\uac00-\ud7af]/g) || []).length;
+      async function send() {
+        if (running) return;
 
-          // Count ASCII and other characters
+        // Input & setup
+        let userText = gatherUserInput();
+        if (!userText) return;
+        userText = await maybeAppendAttachments(userText);
 
-          const specialChars = (text.match(/[{}[\]();,:.!?-]/g) || []).length;
-          const otherChars = text.length - chineseChars - japaneseChars - koreanChars - specialChars;
+        setStamp();
+        running = true;
+        sendBtn.disabled = true; stopBtn.disabled = false;
+        setStatus('busy', 'Querying');
+        updateModelBadge(modelSelect.value || 'lmstudio');
 
-          // Asian characters are typically 1 token each
-          const asianTokens = chineseChars + japaneseChars + koreanChars;
+        ensureSystemMessage();
+        pushUserMessage(userText);
 
-          // Other characters use the old heuristic
-          const otherTokens = otherChars > 0 ? Math.ceil(otherChars / 4.0) : 0;
+        const { assistantNode, modelTag } = addAssistantShell();
+        startBlink(modelTag);
 
-          return asianTokens + otherTokens + specialChars;
-        }
-
-        const tokenCount = completionTokens || smartTokenEstimate(assistantAccum);
-
-
-        const tpsNum = (elapsedSec > 0 && tokenCount > 0)
-          ? (tokenCount / elapsedSec)
-          : NaN;
-
-        // display text (for the bubble)
-        const tpsText = Number.isFinite(tpsNum) ? tpsNum.toFixed(2) : '—';
-
-        const statsLine = `<div style="font-size:12px;color:var(--muted)">
-            Tokens: ${tokenCount} | Time: ${elapsedSec.toFixed(2)}s | ${tpsText} tokens/sec
-          </div>`;
-
-        assistantNode.innerHTML = shadow.innerHTML + statsLine; // append stats
-        assistantNode.classList.add('markdown');
-        addCopyButtons(assistantNode);
-
-        messages.push({
-          role: 'assistant',
-          content: assistantAccum,
-          model: currentStreamingModel,
-          stats: { tokens: tokenCount, timeSec: elapsedSec, tps: Number.isFinite(tpsNum) ? +tpsNum.toFixed(2) : null, endTime: endTime }
-        });
-
-        running = false;
-        sendBtn.disabled = false; stopBtn.disabled = true;
-        // Stop blinking and (optionally) hide the badge again
-        if (pendingModelTagEl) pendingModelTagEl.classList.remove('blink-slow');
-        if (modelBadge) {
-          modelBadge.classList.remove('blink-slow');
-          modelBadge.style.display = 'none'; // keep header clean when idle
+        if (selectedIsEmbeddingOnly()) {
+          showEmbeddingOnlyError(assistantNode);
+          running = false; sendBtn.disabled = false; stopBtn.disabled = true;
+          stopBlink(modelTag);
+          return;
         }
 
-        controller = null;
+        const payload = buildPayload();
+        const headers = buildHeaders();
+        const url = activeChatURL();
+        controller = new AbortController();
+
+        const renderer = makeRenderer(assistantNode);
+        const startTime = Date.now();
+        let completionTokens = 0;
+        let currentModel = modelSelect.value || 'lmstudio';
+        const isStreaming = (doStreamEl && doStreamEl.checked);
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+
+          if (!res.ok || !res.body) {
+            let msg = `HTTP ${res.status}`;
+            try {
+              const t = await res.text();
+              const j = JSON.parse(t);
+              msg += j?.error?.message ? ` — ${j.error.message}` : (t ? ` — ${t}` : '');
+            } catch { }
+            assistantNode.innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
+            throw new Error(msg);
+          }
+
+          if (isStreaming) {
+            await runStreaming(
+              res,
+              renderer,
+              (model) => { updateModelBadge(model); currentModel = model; },
+              (ct) => { completionTokens = ct; }
+            );
+            setStatus('online', 'Connected');
+          } else {
+            const { content, modelId, completionTokens: ct } = await runNonStreaming(res);
+            updateModelBadge(modelId);
+            setStatus('online', 'Connected');
+            currentModel = modelId;
+            completionTokens = ct;
+            renderer.append(content);
+            renderer.flush(); // ensure immediate paint
+          }
+
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            renderer.append('\n\n[stopped]');
+            setStatus('online', 'Stopped');
+          } else {
+            renderer.append('\n\n[error] ' + err.message);
+            setStatus('offline', 'Offline');
+          }
+        } finally {
+          const endTime = Date.now();
+          const elapsedSec = (endTime - startTime) / 1000;
+
+          const assistantText = await renderer.finalize();
+
+          const tokenCount = completionTokens || tokenEstimateSmart(assistantText);
+          assistantNode.innerHTML += statsFooter(tokenCount, elapsedSec);
+          addCopyButtons(assistantNode);
+
+          messages.push({
+            role: 'assistant',
+            content: assistantText,
+            model: currentModel,
+            stats: {
+              tokens: tokenCount,
+              timeSec: elapsedSec,
+              tps: (elapsedSec > 0 && tokenCount > 0) ? +(tokenCount / elapsedSec).toFixed(2) : null,
+              endTime
+            }
+          });
+
+          running = false;
+          sendBtn.disabled = false; stopBtn.disabled = true;
+          stopBlink(modelTag);
+          controller = null;
+          saveSession();
+        }
+      }
+
+
+
+
+
+      // Handlers
+      sendBtn.addEventListener('click', send);
+      stopBtn.addEventListener('click', () => { if (controller) controller.abort(); });
+
+      inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault(); send();
+        }
+      });
+
+      exportBtn.addEventListener('click', exportMarkdown);
+      //printBtn.addEventListener('click', () => window.print());
+      printBtn.addEventListener('click', () => {
+        const original = document.title;
+        const safe = (titleEl.textContent || 'chat')      // use current msg title
+          .replace(/[\\/:*?"<>|]+/g, '')                  // strip illegal filename chars
+          .trim()
+          .slice(0, 120);                                 // keep it reasonable
+
+        document.title = safe;                            // browsers use this for PDF name
+        setStamp?.();                                     // optional: keep header in sync
+
+        const restore = () => {
+          document.title = original;
+          window.removeEventListener('afterprint', restore);
+          window.onafterprint = null;
+        };
+        window.addEventListener('afterprint', restore);
+        window.onafterprint = restore;                    // Safari/older support
+
+        window.print();
+      });
+
+      newBtn.addEventListener('click', () => {
+        if (running) return;
+        //if (!confirm('Start a new chat? Current transcript will be cleared.')) return;
+        messages = [];
+        threadEl.innerHTML = '';
+        titleEl.textContent = 'Untitled Chat';
+        sessionId = generateSessionId();
+        localStorage.setItem('lmstudio_session_id', sessionId);
+        saveSession();
+        setStamp();
+      });
+
+
+      document.getElementById('clearChatBtn').addEventListener('click', () => {
+        if (running) {
+          alert('Please stop the current generation first');
+          return;
+        }
+        if (!confirm('Clear current chat?')) return;
+        messages = [];
+        threadEl.innerHTML = '';
+        saveSession();
+        setStamp();
+      });
+      // Title from first user line
+      const titleObserver = new MutationObserver(() => {
+        const firstUser = messages.find(m => m.role === 'user');
+        if (firstUser && titleEl.textContent === 'Untitled Chat') {
+          titleEl.textContent = firstUser.content.slice(0, 60).replace(/\s+/g, ' ').trim();
+          saveSession();
+        }
+      });
+      titleObserver.observe(threadEl, { childList: true, subtree: true });
+
+      // helpers
+      document.getElementById('refreshModels').addEventListener('click', () => refreshModels(false));
+      // Remember last API base and refresh on change
+      // add after your existing const declarations
+
+
+      // ===== LLM Server Store (localStorage) =====
+      const LS_SERVERS_KEY = 'llmServers';
+      const LS_ACTIVE_SERVER = 'llmServerActive';
+
+      const serverSelect = document.getElementById('serverSelect');
+      const manageServersBtn = document.getElementById('manageServers');
+
+      const dlg = document.getElementById('serverMgr');
+      const listEl = document.getElementById('serverList');
+      const nameEl = document.getElementById('serverName');
+      const baseEl = document.getElementById('serverBase');
+      const modelsPathEl = document.getElementById('serverModelsPath');
+      const chatPathEl = document.getElementById('serverChatPath');
+      const sysDefEl = document.getElementById('serverSystem');
+      const apiKeyEl = document.getElementById('serverApiKey');
+      const cancelServerBtn = document.getElementById('cancelServerBtn');
+
+
+
+      const saveServerBtn = document.getElementById('saveServerBtn');
+      const newServerBtn = document.getElementById('newServerBtn');
+      const deleteServerBtn = document.getElementById('deleteServerBtn');
+
+      function uid() { return Math.random().toString(36).slice(2, 9); }
+
+      function defaults() {
+        return [
+          {
+            id: 'lmstudio',
+            name: 'LM Studio Local',
+            base: 'http://localhost:1234/v1',
+            modelsPath: '/models',
+            chatPath: '/chat/completions',
+            systemPrompt: ''
+          },
+          {
+            id: 'ollama',
+            name: 'Ollama Local',
+            base: 'http://localhost:11434/v1',
+            modelsPath: '/models',
+            chatPath: '/chat/completions',
+            systemPrompt: ''
+          }
+        ];
+      }
+
+      function loadServers() {
+        try {
+          const raw = localStorage.getItem(LS_SERVERS_KEY);
+          if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr) && arr.length) return arr;
+          }
+        } catch { }
+        // migrate old single apiBase if present
+        const legacy = localStorage.getItem('apiBaseLast');
+        if (legacy) {
+          const arr = defaults();
+          arr.push({
+            id: 'custom-' + uid(),
+            name: 'Custom (migrated)',
+            base: legacy,
+            modelsPath: '/models',
+            chatPath: '/chat/completions',
+            systemPrompt: ''
+          });
+          saveServers(arr);
+          return arr;
+        }
+        const arr = defaults();
+        saveServers(arr);
+        return arr;
+      }
+
+      function saveServers(arr) {
+        localStorage.setItem(LS_SERVERS_KEY, JSON.stringify(arr));
+      }
+
+      function getServers() { return loadServers(); }
+
+      function getActiveServerId() {
+        return localStorage.getItem(LS_ACTIVE_SERVER) || 'lmstudio';
+      }
+
+      function setActiveServerId(id) {
+        localStorage.setItem(LS_ACTIVE_SERVER, id);
+      }
+
+      function getActiveServer() {
+        const id = getActiveServerId();
+        const all = getServers();
+        return all.find(s => s.id === id) || all[0];
+      }
+
+      function upsertServer(srv) {
+        const arr = getServers();
+        const i = arr.findIndex(x => x.id === srv.id);
+        if (i >= 0) arr[i] = srv; else arr.push(srv);
+        saveServers(arr);
+      }
+
+      function deleteServer(id) {
+        let arr = getServers().filter(s => s.id !== id);
+        if (!arr.length) arr = defaults();
+        saveServers(arr);
+        if (getActiveServerId() === id) setActiveServerId(arr[0].id);
+      }
+
+      function renderServerSelect() {
+        const arr = getServers();
+        serverSelect.innerHTML = '';
+        for (const s of arr) {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `${s.name}`;
+          serverSelect.appendChild(opt);
+        }
+        serverSelect.value = getActiveServerId();
+      }
+
+      function applyActiveServerToUI() {
+        const srv = getActiveServer();
+
+        refreshModels(false);
+        checkConnection();
         saveSession();
       }
-    }
 
-    // Handlers
-    sendBtn.addEventListener('click', send);
-    stopBtn.addEventListener('click', () => { if (controller) controller.abort(); });
+      // Init the selector
+      renderServerSelect();
+      applyActiveServerToUI();
 
-    inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault(); send();
+      serverSelect.addEventListener('change', () => {
+        setActiveServerId(serverSelect.value);
+        applyActiveServerToUI();
+      });
+
+      // Manager dialog wiring
+      function fillEditorFrom(id) {
+        const arr = getServers();
+        const s = arr.find(x => x.id === id) || {
+          id: 'new-' + uid(),
+          name: '',
+          base: '',
+          modelsPath: '/models',
+          chatPath: '/chat/completions',
+          systemPrompt: ''
+        };
+        listEl.value = s.id;
+        nameEl.value = s.name;
+        baseEl.value = s.base;
+        modelsPathEl.value = s.modelsPath || '/models';
+        chatPathEl.value = s.chatPath || '/chat/completions';
+        sysDefEl.value = s.systemPrompt || '';
+        apiKeyEl.value = s.apiKey || '';
       }
-    });
 
-    exportBtn.addEventListener('click', exportMarkdown);
-    //printBtn.addEventListener('click', () => window.print());
-    printBtn.addEventListener('click', () => {
-      const original = document.title;
-      const safe = (titleEl.textContent || 'chat')      // use current msg title
-        .replace(/[\\/:*?"<>|]+/g, '')                  // strip illegal filename chars
-        .trim()
-        .slice(0, 120);                                 // keep it reasonable
+      function refreshList() {
+        const arr = getServers();
+        listEl.innerHTML = '';
+        for (const s of arr) {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          listEl.appendChild(opt);
+        }
+        listEl.value = getActiveServerId();
+        fillEditorFrom(listEl.value);
+      }
 
-      document.title = safe;                            // browsers use this for PDF name
-      setStamp?.();                                     // optional: keep header in sync
+      manageServersBtn.addEventListener('click', () => {
+        refreshList();
+        dlg.showModal();
+      });
 
-      const restore = () => {
-        document.title = original;
-        window.removeEventListener('afterprint', restore);
-        window.onafterprint = null;
-      };
-      window.addEventListener('afterprint', restore);
-      window.onafterprint = restore;                    // Safari/older support
+      listEl.addEventListener('change', () => fillEditorFrom(listEl.value));
 
-      window.print();
-    });
+      newServerBtn.addEventListener('click', () => {
+        const id = 'srv-' + uid();
+        listEl.value = id;
+        nameEl.value = '';
+        baseEl.value = '';
+        modelsPathEl.value = '/models';
+        chatPathEl.value = '/chat/completions';
+        sysDefEl.value = '';
+      });
 
-    newBtn.addEventListener('click', () => {
-      if (running) return;
-      if (!confirm('Start a new chat? Current transcript will be cleared.')) return;
-      messages = [];
-      threadEl.innerHTML = '';
-      titleEl.textContent = 'Untitled Chat';
-      sessionId = generateSessionId();
-      localStorage.setItem('lmstudio_session_id', sessionId);
-      saveSession();
-      setStamp();
-    });
+      deleteServerBtn.addEventListener('click', () => {
+        const id = listEl.value;
+        if (!id) return;
+        if (!confirm('Delete this server?')) return;
+        deleteServer(id);
+        renderServerSelect();
+        refreshList();
+        serverSelect.value = getActiveServerId();
+        applyActiveServerToUI();
+      });
 
-    // Title from first user line
-    const titleObserver = new MutationObserver(() => {
-      const firstUser = messages.find(m => m.role === 'user');
-      if (firstUser && titleEl.textContent === 'Untitled Chat') {
-        titleEl.textContent = firstUser.content.slice(0, 60).replace(/\s+/g, ' ').trim();
+      cancelServerBtn.addEventListener('click', () => {
+        dlg.close('cancel');
+      });
+
+      dlg.addEventListener('cancel', (e) => {
+        // Some browsers close by default; this makes it explicit & consistent.
+        e.preventDefault();
+        dlg.close('cancel');
+      });
+
+
+
+      saveServerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const id = listEl.value || ('srv-' + uid());
+        const srv = {
+          id,
+          name: nameEl.value.trim() || 'Unnamed',
+          base: baseEl.value.trim(),
+          modelsPath: (modelsPathEl.value || '/models').trim(),
+          chatPath: (chatPathEl.value || '/chat/completions').trim(),
+          systemPrompt: sysDefEl.value || '',
+          apiKey: apiKeyEl.value.trim() || ''
+        };
+        if (!/^https?:\/\//i.test(srv.base)) {
+          alert('Base URL must start with http:// or https://');
+          return;
+        }
+        upsertServer(srv);
+        renderServerSelect();
+        serverSelect.value = id;
+        setActiveServerId(id);
+        applyActiveServerToUI();
+        dlg.close();
+      });
+
+      // Helpers that existing code will use:
+      function activeModelsURL() {
+        const s = getActiveServer();
+        return s.base.replace(/\/$/, '') + (s.modelsPath || '/models');
+      }
+      function activeChatURL() {
+        const s = getActiveServer();
+        return s.base.replace(/\/$/, '') + (s.chatPath || '/chat/completions');
+      }
+
+
+
+
+      // Model selection change handler
+      modelSelect.addEventListener('change', () => {
+        updateModelBadge(modelSelect.value);
         saveSession();
-      }
-    });
-    titleObserver.observe(threadEl, { childList: true, subtree: true });
+      });
 
-    // helpers
-    document.getElementById('refreshModels').addEventListener('click', () => refreshModels(false));
-
-    // Model selection change handler
-    modelSelect.addEventListener('change', () => {
+      refreshModels();
       updateModelBadge(modelSelect.value);
-      saveSession();
-    });
+      setStamp();
+      checkConnection();
+      setInterval(checkConnection, 15000);
+      window.addEventListener('online', () => setStatus('online', 'Online'));
+      window.addEventListener('offline', () => setStatus('offline', 'Offline'));
 
-    refreshModels();
-    updateModelBadge(modelSelect.value);
-    setStamp();
-    checkConnection();
-    setInterval(checkConnection, 15000);
-    window.addEventListener('online', () => setStatus('online', 'Online'));
-    window.addEventListener('offline', () => setStatus('offline', 'Offline'));
+      // Auto-focus composer
+      setTimeout(() => inputEl.focus(), 50);
 
-    // Auto-focus composer
-    setTimeout(() => inputEl.focus(), 50);
+      // Load session on startup
+      loadCurrentSession();
+      loadChatHistory();
 
-    // Load session on startup
-    loadCurrentSession();
-    loadChatHistory();
+      // Save session when system prompt changes
 
-    // Save session when system prompt changes
-    sysEl.addEventListener('blur', saveSession);
-  </script>
-
-  <script>
+    </script>
+    
+    <script>
   (() => {
     const menu = document.getElementById('kebabMenu');
     const btn  = document.getElementById('menuBtn');
